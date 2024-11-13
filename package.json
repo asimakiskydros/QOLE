@@ -1,0 +1,29 @@
+{
+    "name": "qole",
+    "version": "1.0.0",
+    "main": "./dist/index.js",
+    "scripts": {
+        "build": "tsc"
+    },
+    "keywords": [
+        "QOLE", 
+        "Quantum Simulator", 
+        "Quantum Circuit",
+        "Many Qubits",
+        "Lazy Evaluation"
+    ],
+    "author": "Asimakis Kydros",
+    "license": "ISC",
+    "description": "",
+    "devDependencies": {
+        "@types/node": "^22.9.0",
+        "typescript": "^5.6.3"
+    },
+    "exports": {
+        ".": "./dist/index.js",
+        "./execution": "./dist/execution/qmdd.js",
+        "./utils/complex": "./dist/utils/complex.js",
+        "./utils/iterators": "./dist/utils/iterators.js",
+        "./circuit/gates": "./dist/circuit/gates.js"
+    }
+}

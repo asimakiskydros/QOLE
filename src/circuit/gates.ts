@@ -1,44 +1,11 @@
-/**
- * An operation on a qubit, be it a gate or a measurement.
- */
-export class Instruction
-{
-    protected constructor () {} // Instruction should not be create-able by third parties
-
-    /**
-     * Unwraps the underlying building blocks of `this` as a matrix of `Instructions`.
-     * @returns A matrix of the internal `Instructions`. Sub-array 0 contains controls, Sub-array 1 the rest.
-     */
-    public unwrap (): Instruction[][]
-    {
-        // the base case has 0 controls and is itself its only building block
-        return [[], [this]];
-    }
-}
-
-/**
- * An action that measures the state of the qubit it is on and collapses it to a basis state.
- */
-export class Measurement extends Instruction {
-    // all measurements are fundamentally the same, make them singletons
-    private static singleton: Measurement | null = null;
-    
-    constructor ()
-    {
-        if (Measurement.singleton) 
-            return Measurement.singleton;
-
-        super();
-        Measurement.singleton = this;
-    }
-}
+import { reversed } from "../utils/iterators";
 
 /**
  * A unitary transformation of a qubit's state.
  */
-export class Gate extends Instruction
+export class Gate
 {
-    protected constructor () { super(); } // Gate should not be create-able by third parties
+    protected constructor () {} // Gate should not be create-able by third parties
 
     /**
      * Returns the unitary matrix of the `Gate` as a flattened array: `[top left, bottom left, top right, bottom right]`.
@@ -47,37 +14,35 @@ export class Gate extends Instruction
     { 
         throw new Error(`${this.constructor.name} class doesn\'t implement matrix().`); 
     }
+
+    /**
+     * Unwraps the underlying building blocks of `this` as a matrix of `Gate`s.
+     * @returns A matrix of the internal `Gate`s. Sub-array 0 contains controls, Sub-array 1 the rest.
+     */
+    public unwrap (): Gate[][]
+    {
+        // the base case has 0 controls and is itself its only building block
+        return [[], [this]];
+    }
     
     /**
      * Creates a new `Gate` that is a controlled version of `this` gate.
      * @param numControls The number of controls to apply to this new `Gate`.
-     * @param targets The number of targets - the body of `this`.
      * @param ctrlState The control state to activate on.
      * @returns A `BaseControlledGate` representing `this`, controlled as specified.
      */
     public control (numControls: number, ctrlState?: string | number): ControlledGate
-    {
-        // call the constructor of the caller to create a copy
-        const body = new (this.constructor() as { new (): Gate })();
-        let _numControls = numControls;
-        let _ctrlState = ctrlState || 2 ** numControls - 1;
-        let targets = [body];
-
-        if (body instanceof BaseControlledGate) 
-        {
-            // dissect `body` into controls and targets and merge them with the new extra
-            // controls/targets
-            const ingredients = body.unwrap();
-            
-            targets = [...ingredients[1]] as Gate[]; // controls stay the same
-            _numControls += ingredients[0].length;   // number of controls is old + new
-            _ctrlState = body.controlState + (       // append the new control state to the old one. If the new is wrong, it will proc errors later.
-                typeof _ctrlState === 'string' ? 
-                    _ctrlState : 
-                    _ctrlState.toString(2).padStart(numControls, '0'));
-        }
-
-        return new BaseControlledGate(_numControls, targets, _ctrlState);
+    {    
+        const [prevControls, targets] = this.unwrap();
+        const prevCtrlState = this instanceof ControlledGate ? this.controlState : '';
+        const newCtrlState = 
+            ctrlState === undefined ? 
+                (2 ** numControls - 1).toString(2):
+            typeof ctrlState === 'number' ? 
+                ctrlState.toString(2).padStart(numControls, '0'):
+                ctrlState;
+        
+        return new ControlledGate(prevCtrlState.length + numControls, targets as Gate[], prevCtrlState + newCtrlState)
     }
 }
 
@@ -138,53 +103,53 @@ export class Control extends Gate
  */
 export class ControlledGate extends Gate
 {
-    protected constructor () { super(); } // ControlledGate should not be create-able by third parties
-}
-
-/**
- * Implementation of `ControlledGate`. 
- * 
- * Done like this so that all controlled gates can be typehinted as a `ControlledGate`,
- * but `ControlledGate` itself not be create-able.
- */
-class BaseControlledGate extends ControlledGate
-{
     public readonly controlState: string;
     public readonly targets: Gate[];
 
     constructor (numControls: number, targets: Gate[], ctrlState: string | number)
     {
-        if (numControls < 1 || !Number.isInteger(numControls))
-            throw new Error(`Cannot declare ${numControls} number of controls.`);
+        if (!Array.isArray(targets) || targets.some(element => !(element instanceof Gate)))
+            /* c8 ignore next */
+            throw new Error(`Wrong target type in ControlledGate (targets must be an array of Gates).`);
+
+        if (ctrlState !== undefined && typeof ctrlState !== 'string' && typeof ctrlState !== 'number')
+            throw new Error(
+                `Invalid input type for ctrlState in ControlledGate` + 
+                ` (expected {string, number, undefined}, got ${typeof ctrlState}).`);
+
+        if (typeof numControls !== 'number' || numControls < 0 || !Number.isInteger(numControls))
+            throw new Error(`Cannot declare a ControlledGate with ${numControls} number of controls.`);
         
-        if (ctrlState && typeof ctrlState === 'string')
+        if (ctrlState !== undefined && typeof ctrlState === 'string')
             for (const bit of ctrlState)
                 if (bit !== '0' && bit !== '1')
-                    throw new Error(`Unexpected control state encountered (got ${bit}).`);
+                    throw new Error(`Unexpected control state encountered in ControlledGate (got ${bit}).`);
         
-        if (ctrlState && typeof ctrlState === 'string' && ctrlState.length !== numControls)
+        if (ctrlState !== undefined && typeof ctrlState === 'string' && ctrlState.length !== numControls)
             throw new Error(
-                `Specified control state isn't applicable to the declared number of controls 
-                (got ${numControls} controls and state '${ctrlState}').`);
+                `Specified control state in ControlledGate isn't applicable to the declared number of controls` + 
+                ` (got ${numControls} controls and state '${ctrlState}').`);
         
-        if (ctrlState && typeof ctrlState === 'number' && ctrlState < 0 || !Number.isInteger(ctrlState))
-            throw new Error(`Can't declare a control state that satisfies on ${ctrlState}.`);
+        if (ctrlState !== undefined && typeof ctrlState === 'number' && (ctrlState < 0 || !Number.isInteger(ctrlState)))
+            throw new Error(`Can't declare a ControlledGate that satisfies on ${ctrlState}.`);
 
-        if (ctrlState && typeof ctrlState === 'number' && ctrlState.toString(2).length > numControls)
+        if (ctrlState !== undefined && typeof ctrlState === 'number' && numControls > 0 && ctrlState.toString(2).length > numControls)
             throw new Error(
-                `Specified control state isn't applicable to the declared number of controls 
-                (got ${numControls} controls and state ${ctrlState} = '${ctrlState.toString(2)}').`);
+                `Specified control state in ControlledGate isn't applicable to the declared number of controls` + 
+                ` (got ${numControls} controls and state ${ctrlState} = '${ctrlState.toString(2)}').`);
         
         super();
         this.targets = [...targets];
-        this.controlState = typeof ctrlState === 'string' ? ctrlState : ctrlState.toString(2).padStart(numControls, '0');
+        this.controlState = 
+            numControls === 0 ? '' :
+            typeof ctrlState === 'string' ? ctrlState : ctrlState.toString(2).padStart(numControls, '0');
     }
 
-    public override unwrap (): Instruction[][]
+    public override unwrap (): Gate[][]
     {
         const controls: Control[] = [];
 
-        for (const state of this.controlState)
+        for (const state of reversed(this.controlState))
             controls.push(new Control(state === '0'));
 
         return [controls, this.targets];
@@ -194,18 +159,18 @@ class BaseControlledGate extends ControlledGate
 /**
  * A `Gate` that leaves the qubit state as is.
  */
-export class InertiaGate extends Gate
+export class I extends Gate
 {
     // All inertias are fundamentally the same, make them singletons.
-    private static singleton: InertiaGate | null = null;
+    private static singleton: I | null = null;
 
     constructor ()
     {
-        if (InertiaGate.singleton)
-            return InertiaGate.singleton;
+        if (I.singleton)
+            return I.singleton;
 
         super();
-        InertiaGate.singleton = this;
+        I.singleton = this;
     }
 
     public override matrix (): (number | string)[] { return [1, 0, 0, 1]; }
@@ -214,18 +179,18 @@ export class InertiaGate extends Gate
 /**
  * The NOT gate. A `Gate` that flips the qubit state.
  */
-export class XGate extends Gate
+export class X extends Gate
 {
     // All NOTs are fundamentally the same, make them singletons.
-    private static singleton: XGate | null = null;
+    private static singleton: X | null = null;
 
     constructor ()
     {
-        if (XGate.singleton)
-            return XGate.singleton;
+        if (X.singleton)
+            return X.singleton;
 
         super();
-        XGate.singleton = this;
+        X.singleton = this;
     }
 
     public override matrix (): (number | string)[] { return [0, 1, 1, 0]; }
@@ -234,18 +199,18 @@ export class XGate extends Gate
 /**
  * A pi radians flip along the y-axis on the Bloch sphere.
  */
-export class YGate extends Gate
+export class Y extends Gate
 {
     // all Y gates are fundamentally the same, make them singletons.
-    private static singleton: YGate | null = null;
+    private static singleton: Y | null = null;
 
     constructor ()
     {
-        if (YGate.singleton)
-            return YGate.singleton;
+        if (Y.singleton)
+            return Y.singleton;
 
         super();
-        YGate.singleton = this;
+        Y.singleton = this;
     }
 
     public override matrix (): (number | string)[] { return [0, '-i', 'i', 0]; }
@@ -254,18 +219,18 @@ export class YGate extends Gate
 /**
  * A phase flip on the qubit state.
  */
-export class ZGate extends Gate
+export class Z extends Gate
 {
     // all Z gates are fundamentally the same, make them singletons.
-    private static singleton: ZGate | null = null;
+    private static singleton: Z | null = null;
 
     constructor ()
     {
-        if (ZGate.singleton)
-            return ZGate.singleton;
+        if (Z.singleton)
+            return Z.singleton;
 
         super();
-        ZGate.singleton = this;
+        Z.singleton = this;
     }
 
     public override matrix (): (number | string)[] { return [1, 0, 0, -1]; }
@@ -274,18 +239,18 @@ export class ZGate extends Gate
 /**
  * The Hadamard gate. A mapping to and from maximal superposition.
  */
-export class HGate extends Gate
+export class H extends Gate
 {
     // all Hadamards are fundamentally the same, make them singletons.
-    private static singleton: HGate | null = null;
+    private static singleton: H | null = null;
 
     constructor ()
     {
-        if (HGate.singleton)
-            return HGate.singleton;
+        if (H.singleton)
+            return H.singleton;
 
         super();
-        HGate.singleton = this;
+        H.singleton = this;
     }
 
     public override matrix (): (number | string)[] 
@@ -298,18 +263,18 @@ export class HGate extends Gate
 /**
  * A quarter turn around the z-axis on the Bloch sphere.
  */
-export class SGate extends Gate
+export class S extends Gate
 {
     // all S gates are fundamentally the same, make them singletons.
-    private static singleton: SGate | null = null;
+    private static singleton: S | null = null;
 
     constructor ()
     {
-        if (SGate.singleton)
-            return SGate.singleton;
+        if (S.singleton)
+            return S.singleton;
 
         super();
-        SGate.singleton = this;
+        S.singleton = this;
     }
 
     public override matrix (): (number | string)[] { return [1, 0, 0, 'i']; }
@@ -318,88 +283,88 @@ export class SGate extends Gate
 /**
  * The CNOT (or Feynman) gate. A controlled version of NOT.
  */
-export class CXGate extends BaseControlledGate
+export class CX extends ControlledGate
 {
     constructor (ctrlState: string | number = '1')
     {
-        super(1, [new XGate()], ctrlState);
+        super(1, [new X()], ctrlState);
     }
 }
 
 /**
  * The CCNOT (or Toffoli) gate. A controlled version of CNOT.
  */
-export class CCXGate extends BaseControlledGate
+export class CCX extends ControlledGate
 {
     constructor (ctrlState: string | number = '11')
     {
-        super(2, [new XGate()], ctrlState);
+        super(2, [new X()], ctrlState);
     }
 }
 
 /**
  * The generalized Toffoli gate. A NOT with m controls.
  */
-export class MCXGate extends BaseControlledGate
+export class MCX extends ControlledGate
 {
     constructor (numControls: number, ctrlState?: string | number)
     {
-        super(numControls, [new XGate()], ctrlState || 2 ** numControls - 1);
+        super(numControls, [new X()], ctrlState ?? 2 ** numControls - 1);
     }
 }
 
 /**
  * A controlled version of Pauli Y.
  */
-export class CYGate extends BaseControlledGate
+export class CY extends ControlledGate
 {
     constructor (ctrlState: string | number = '1')
     {
-        super(1, [new YGate()], ctrlState);
+        super(1, [new Y()], ctrlState);
     }
 }
 
 /**
  * The controlled-phase gate. A controlled version of Pauli Z.
  */
-export class CZGate extends BaseControlledGate
+export class CZ extends ControlledGate
 {
     constructor (ctrlState: string | number = '1')
     {
-        super(1, [new ZGate()], ctrlState);
+        super(1, [new Z()], ctrlState);
     }
 }
 
 /**
  * A controlled version of CZ.
  */
-export class CCZGate extends BaseControlledGate
+export class CCZ extends ControlledGate
 {
-    constructor (ctrlState: string | number = '1')
+    constructor (ctrlState: string | number = '11')
     {
-        super(2, [new ZGate()], ctrlState);
+        super(2, [new Z()], ctrlState);
     }
 }
 
 /**
  * A controlled version of Hadamard.
  */
-export class CHGate extends BaseControlledGate
+export class CH extends ControlledGate
 {
     constructor (ctrlState: string | number = '1')
     {
-        super(1, [new HGate()], ctrlState);
+        super(1, [new H()], ctrlState);
     }
 }
 
 /**
  * A controlled version of S.
  */
-export class CSGate extends BaseControlledGate
+export class CS extends ControlledGate
 {
     constructor (ctrlState: string | number = '1')
     {
-        super(1, [new SGate()], ctrlState);
+        super(1, [new S()], ctrlState);
     }
 }
 

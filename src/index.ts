@@ -1,1 +1,1 @@
-export { QuantumCircuit } from './circuit/QuantumCircuit'
+export { QuantumCircuit } from './circuit/circuit'

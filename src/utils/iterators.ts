@@ -3,9 +3,9 @@
  * @param arr The array to iterate over.
  * @param enumerate If `true`, the true index of the element will also be returned.
  */
-export function  reversed <T> (arr: Array<T>, enumerate:  true):  Generator<[number, T]>;
-export function  reversed <T> (arr: Array<T>, enumerate?: false): Generator<T>;
-export function* reversed <T> (arr: Array<T>, enumerate: boolean = false): Generator<[number, T] | T> 
+export function  reversed <T> (arr: ArrayLike<T>, enumerate:  true):  Generator<[number, T]>;
+export function  reversed <T> (arr: ArrayLike<T>, enumerate?: false): Generator<T>;
+export function* reversed <T> (arr: ArrayLike<T>, enumerate: boolean = false): Generator<[number, T] | T> 
 {
     for (let i = arr.length - 1; i >= 0; i--) 
         yield enumerate ? [i, arr[i]] as [number, T] : arr[i];
@@ -19,9 +19,9 @@ export function* reversed <T> (arr: Array<T>, enumerate: boolean = false): Gener
  * @param arr2 The second array to iterate over.
  * @param enumerate If `true`, the index of the elements will also be returned.
  */
-export function  zip <T, S> (arr1: Array<T>, arr2: Array<S>, enumerate:  true):  Generator<[number, T, S]>;
-export function  zip <T, S> (arr1: Array<T>, arr2: Array<S>, enumerate?: false): Generator<[T, S]>;
-export function* zip <T, S> (arr1: Array<T>, arr2: Array<S>, enumerate: boolean = false): Generator<[number, T, S] | [T, S]>
+export function  zip <T, S> (arr1: ArrayLike<T>, arr2: Array<S>, enumerate:  true):  Generator<[number, T, S]>;
+export function  zip <T, S> (arr1: ArrayLike<T>, arr2: Array<S>, enumerate?: false): Generator<[T, S]>;
+export function* zip <T, S> (arr1: ArrayLike<T>, arr2: Array<S>, enumerate: boolean = false): Generator<[number, T, S] | [T, S]>
 {
     if (arr1.length !== arr2.length) 
         throw new Error(`Zipped arrays must be of the same length (got ${arr1.length}/${arr2.length})`);

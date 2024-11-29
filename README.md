@@ -1,0 +1,1 @@
+![Tests](https://github.com/asimakiskydros/QOLE/actions/workflow/test.yml/badge.svg)

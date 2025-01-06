@@ -1,40 +1,40 @@
 {
-    "name": "qole",
-    "version": "1.0.0",
-    "main": "./dist/index.js",
-    "type": "module",
-    "scripts": {
-        "build": "tsc",
-        "test": "jest",
-        "test:custom": "jest --reporters='./scripts/jest-reporter.js'"
-    },
-    "keywords": [
-        "QOLE",
-        "Quantum Simulator",
-        "Quantum Circuit",
-        "Many Qubits",
-        "Lazy Evaluation",
-        "Quantum Multi-Valued Decision Diagram",
-        "QMDD",
-        "JavaScript",
-        "TypeScript"
-    ],
-    "author": "Asimakis Kydros",
-    "license": "ISC",
-    "description": "The Quantum Operations Lazy Evaluator is a simulator for executing Quantum Circuits, leveraging the memory-compactness of QMDDs.",
-    "devDependencies": {
-        "@types/complex.js": "^2.0.5",
-        "@types/jest": "^29.5.14",
-        "@types/node": "^22.9.0",
-        "complex.js": "^2.4.2",
-        "jest": "^29.7.0",
-        "ts-jest": "^29.2.5",
-        "ts-node": "^10.9.2",
-        "typescript": "^5.6.3"
-    },
-    "exports": {
-        ".": "./dist/index.js",
-        "./execution": "./dist/execution/qmdd.js",
-        "./circuit/gates": "./dist/circuit/gates.js"
-    }
+  "name": "qole",
+  "version": "1.1.0",
+  "main": "./dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:custom": "jest --reporters='./scripts/jest-reporter.js'",
+    "test:debug": "node --inspect-brk ./node_modules/.bin/jest --watch --runInBand"
+  },
+  "keywords": [
+    "QOLE",
+    "Quantum Simulator",
+    "Quantum Circuit",
+    "Many Qubits",
+    "Lazy Evaluation",
+    "Quantum Multi-Valued Decision Diagram",
+    "QMDD",
+    "JavaScript",
+    "TypeScript"
+  ],
+  "author": "Asimakis Kydros",
+  "license": "ISC",
+  "description": "The Quantum Operations Lazy Evaluator is a simulator for executing Quantum Circuits, leveraging the memory-compactness of QMDDs.",
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.9.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "exports": {
+    ".": "./dist/circuit.js",
+    "./gates": "./dist/gates.js",
+    "./qmdd": "./dist/qmdd.js",
+    "./complex": "./dist/complex.js"
+  }
 }

@@ -1,4 +1,10 @@
-import { reversed } from "../utils/iterators";
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+import { Complex } from "./complex";
 
 /**
  * A unitary transformation of a qubit's state.
@@ -10,7 +16,7 @@ export class Gate
     /**
      * Returns the unitary matrix of the `Gate` as a flattened array: `[top left, bottom left, top right, bottom right]`.
      */
-    public matrix (): (number | string)[] 
+    public matrix (): number[] 
     { 
         throw new Error(`${this.constructor.name} class doesn\'t implement matrix().`); 
     }
@@ -76,7 +82,7 @@ export class Control extends Gate
             Control.oneSingleton = this;
     }
 
-    public override matrix (): (number | string)[]
+    public override matrix (): number[]
     { 
         return this === Control.zeroSingleton ? [1, 0, 0, 0] : [0, 0, 0, 1];
     }
@@ -149,8 +155,8 @@ export class ControlledGate extends Gate
     {
         const controls: Control[] = [];
 
-        for (const state of reversed(this.controlState))
-            controls.push(new Control(state === '0'));
+        for (let i = this.controlState.length - 1; i >= 0; i--)
+            controls.push(new Control(this.controlState[i] === '0'))
 
         return [controls, this.targets];
     }
@@ -173,7 +179,7 @@ export class I extends Gate
         I.singleton = this;
     }
 
-    public override matrix (): (number | string)[] { return [1, 0, 0, 1]; }
+    public override matrix (): number[] { return [1, 0, 0, 1]; }
 }
 
 /**
@@ -193,7 +199,7 @@ export class X extends Gate
         X.singleton = this;
     }
 
-    public override matrix (): (number | string)[] { return [0, 1, 1, 0]; }
+    public override matrix (): number[] { return [0, 1, 1, 0]; }
 }
 
 /**
@@ -213,7 +219,7 @@ export class Y extends Gate
         Y.singleton = this;
     }
 
-    public override matrix (): (number | string)[] { return [0, '-i', 'i', 0]; }
+    public override matrix (): number[] { return [0, Complex.NEG_I, Complex.I, 0]; }
 }
 
 /**
@@ -233,7 +239,7 @@ export class Z extends Gate
         Z.singleton = this;
     }
 
-    public override matrix (): (number | string)[] { return [1, 0, 0, -1]; }
+    public override matrix (): number[] { return [1, 0, 0, Complex.NEG_ONE]; }
 }
 
 /**
@@ -253,10 +259,9 @@ export class H extends Gate
         H.singleton = this;
     }
 
-    public override matrix (): (number | string)[] 
+    public override matrix (): number[] 
     { 
-        const sqrtOneHalf = Math.sqrt(0.5);    
-        return [sqrtOneHalf, sqrtOneHalf, sqrtOneHalf, -sqrtOneHalf]; 
+        return [Complex.A, Complex.A, Complex.A, Complex.NEG_A]; 
     }
 }
 
@@ -277,7 +282,26 @@ export class S extends Gate
         S.singleton = this;
     }
 
-    public override matrix (): (number | string)[] { return [1, 0, 0, 'i']; }
+    public override matrix (): number[] { return [1, 0, 0, Complex.I]; }
+}
+
+/**
+ * An eighth turn around the z-axis on the Bloch sphere.
+ */
+export class T extends Gate
+{
+    private static singleton: T | null = null;
+
+    constructor ()
+    {
+        if (T.singleton)
+            return T.singleton;
+
+        super();
+        T.singleton = this;
+    }
+
+    public override matrix (): number[] { return [1, 0, 0, Complex.B]; }
 }
 
 /**

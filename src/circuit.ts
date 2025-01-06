@@ -1,12 +1,16 @@
-import { zip } from "../utils/iterators";
-import { QMDD } from "../execution/qmdd";
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+import { QMDD } from "./qmdd";
 import { 
     Control, ControlledGate, CS, CX, CY, CZ, Gate, H, 
-    I, MCX, S, X, Y, Z, CCX, CCZ, CH } from "./gates";
-
+    I, MCX, S, X, Y, Z, CCX, CCZ, CH, T } from "./gates";
 
 /**
- * A quantum algorithm represented as a series of logical steps.
+ * A quantum algorithm represented as a cascade of quantum logical steps.
  */
 export class QuantumCircuit 
 {    
@@ -112,7 +116,10 @@ export class QuantumCircuit
         ))
             this.matrix.push(this.getEmptyStep());
         
-        for (const [qubit, element] of zip(qubits, instructions))
+        for (let i = 0; i < qubits.length; i++)
+        {
+            const qubit = qubits[i], element = instructions[i];
+
             if (gate instanceof ControlledGate)
                 // place at the last step, guaranteed to be compatible by the previous loop
                 this.matrix.at(-1)![qubit] = element;
@@ -130,7 +137,7 @@ export class QuantumCircuit
                 // the step passed just before breaking or ending the loop is the earliest compatible
                 this.matrix.at(step + 1)![qubit] = element;
             }
-
+        }
         return this;
     }
 
@@ -188,48 +195,19 @@ export class QuantumCircuit
 
         return this;
     }
-
+    
     /**
      * Calculates and returns the statevector of the current circuit instance.
-     * @param as `'generator'`. The statevector is returned as a lazy `Generator` iterable.
-     * @param decimals How many decimal points of accuracy to keep for the complex number parts.
+     * The output is returned as a lazy `Generator` iterable.
+     * @param decimals The number of decimal places of precision to keep for the complex number parts.
+     * @returns The lazy `Generator` implementing the final statevector.
      */
-    public statevector (as?: 'generator', decimals?: number): Generator<[string, number, number]>;
-    /**
-     * Calculates and returns the statevector of the current circuit instance.
-     * @param as `'record'`. The statevector is compiled into a `Record` of states to amplitudes.
-     * @param decimals How many decimal points of accuracy to keep for the complex number parts.
-     *           **WARNING!** Forcing the compilation of the entire statevector in memory at runtime can cause
-     *           crashes for larger circuit widths.
-     */
-    public statevector (as: 'record', decimals?: number): Record<string, { real: number, imag: number }>;
-    public statevector (
-        as: 'generator' | 'record' = 'generator', 
-        decimals: number = 4
-    ):  Generator<[string, number, number]> | Record<string, { real: number, imag: number }> 
+    public statevector (decimals: number = 4):  Generator<{ state: string, real: number, imag: number }>
     {
         if (typeof decimals !== 'number' || decimals < 0 || !Number.isInteger(decimals))
             throw new Error(`Invalid input in QuantumCircuit.statevector: Can't round to ${decimals} decimal places.`);
 
-        if (as !== 'generator' && as !== 'record')
-            throw new Error(`Invalid output type in QuantumCircuit.statevector (expected {'generator', 'record'}, got ${as}).`);
-
-        const statevectorGen = new QMDD(this.matrix).evaluate(decimals);
-    
-        if (as === 'record')
-        {
-            // compile the generator into a record object
-            // for large numbers of qubits this might cause a memory crash
-            const result: Record<string, {real: number, imag: number}> = {};
-
-            for (const [state, real, imag] of statevectorGen)
-                result[state] = {real: real, imag: imag};
-
-            return result;
-        }
-    
-        // else, keep the output as a lazy iterable
-        return statevectorGen;
+        return QMDD.evaluate(QMDD.build(this.matrix, this.qubits), decimals);
     }
 
     /**
@@ -290,6 +268,16 @@ export class QuantumCircuit
     public s (qubit: number): QuantumCircuit
     {
         return this.append(new S(), [qubit]);
+    }
+
+    /**
+     * Adds a T (fourth root of Z) gate on the given qubit index.
+     * @param qubit The qubit inddex to include the gate on.
+     * @returns `this` circuit instance.
+     */
+    public t (qubit: number): QuantumCircuit
+    {
+        return this.append(new T(), [qubit]);
     }
 
     /**

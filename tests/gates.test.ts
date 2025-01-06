@@ -1,11 +1,12 @@
+import { Complex } from '../src/complex';
 import { 
     CCX, CCZ, CH, Control, CS, CX, CY, CZ,
-    H, I, MCX, S, X, Y, Z } from '../src/circuit/gates';
+    H, I, MCX, S, T, X, Y, Z } from '../src/gates';
 
 
-describe("Control", () =>
+describe("Control: ", () =>
 {
-    test("should be a singleton for the activation on |1> case", () =>
+    test("|1> case singleton check", () =>
     {
         const ctrl1 = new Control();
         const ctrl2 = new Control();
@@ -13,7 +14,7 @@ describe("Control", () =>
         expect(ctrl1 === ctrl2).toBe(true);
     });
 
-    test("should be a singleton for the activation on |0> case", () =>
+    test("|0> case singleton check", () =>
     {
         const ctrl1 = new Control(true);
         const ctrl2 = new Control(true);
@@ -21,7 +22,7 @@ describe("Control", () =>
         expect(ctrl1 === ctrl2).toBe(true);
     });
 
-    test("should have different singletons for the cases |0> and |1>", () =>
+    test("Distinct singletons between cases", () =>
     {
         const ctrl0 = new Control(true);
         const ctrl1 = new Control();
@@ -29,28 +30,28 @@ describe("Control", () =>
         expect(ctrl0 === ctrl1).toBe(false);
     });
 
-    test("should have matrix [1, 0, 0, 0] for the case |0>", () =>
+    test("|0> case matrix check", () =>
     {
         const ctrl = new Control(true);
 
         expect(ctrl.matrix()).toEqual([1, 0, 0, 0]);
     });
 
-    test("should have matrix [0, 0, 0, 1] for the case |1>", () =>
+    test("|1> case matrix check", () =>
     {
         const ctrl = new Control();
 
         expect(ctrl.matrix()).toEqual([0, 0, 0, 1]);
     });
 
-    test("should activate on diagonal index 0 for the case |0>", () =>
+    test("|0> case activates on index 0", () =>
     {
         const ctrl = new Control(true);
 
         expect(ctrl.activeDiagonal()).toBe(0);
     });
 
-    test("should activate on diagonal index 3 for the case |1>", () =>
+    test("|1> case activates on index 3", () =>
     {
         const ctrl = new Control();
 
@@ -58,19 +59,18 @@ describe("Control", () =>
     });
 });
 
-const a = Math.sqrt(0.5);
-
 for (const { gate, matrix } of [
-    { gate: I, matrix: [1, 0, 0, 1]      },
-    { gate: X, matrix: [0, 1, 1, 0]      },
-    { gate: Y, matrix: [0, '-i', 'i', 0] },
-    { gate: Z, matrix: [1, 0, 0, -1]     },
-    { gate: H, matrix: [a, a, a, -a]     },
-    { gate: S, matrix: [1, 0, 0, 'i']    },
+    { gate: I, matrix: [1, 0, 0, 1] },
+    { gate: X, matrix: [0, 1, 1, 0] },
+    { gate: Y, matrix: [0, Complex.NEG_I, Complex.I, 0] },
+    { gate: Z, matrix: [1, 0, 0, Complex.NEG_ONE] },
+    { gate: H, matrix: [Complex.A, Complex.A, Complex.A, Complex.NEG_A] },
+    { gate: S, matrix: [1, 0, 0, Complex.I] },
+    { gate: T, matrix: [1, 0, 0, Complex.B] }
 ])
     describe(gate.name, () => 
     {
-        test("should be a singleton", () => 
+        test(" singleton check", () => 
         {
             const obj1 = new gate();
             const obj2 = new gate();
@@ -78,14 +78,14 @@ for (const { gate, matrix } of [
             expect(obj1 === obj2).toBe(true);
         });
 
-        test("should have the correct matrix", () => 
+        test(" matrix check", () => 
         {
             const obj = new gate();
 
             expect(obj.matrix()).toEqual(matrix);
         });
 
-        test("should unwrap to itself only", () => 
+        test(" unwraps to itself only", () => 
         {
             const obj = new gate();
 
@@ -102,14 +102,14 @@ for (const { gate, target } of [
 ])
     describe(gate.name, () => 
     {
-        test(`should unwrap to a control and a ${target.name}`, () =>
+        test(` unwraps to 1 control and 1 ${target.name}`, () =>
         {
             const obj = new gate();
 
             expect(obj.unwrap()).toEqual([[new Control()], [new target()]]);
         });
 
-        test(`should generate the correct underlying Control`, () => 
+        test(` generates the correct underlying Control`, () => 
         {
             const obj1 = new gate();
             const obj0 = new gate('0');
@@ -122,7 +122,7 @@ for (const { gate, target } of [
             .toBe(true);
         });
 
-        test(`should be equal to a ${target.name} controlled once`, () => 
+        test(` equals a ${target.name} controlled once`, () => 
         {
             const state = 0;
             const obj = new gate(state);
@@ -138,14 +138,14 @@ for (const { gate, target } of [
 ])
     describe(gate.name, () =>
     {
-        test(`should unwrap to two controls and a ${target.name}`, () =>
+        test(` unwraps to 2 controls and 1 ${target.name}`, () =>
         {
             const obj = new gate();
 
             expect(obj.unwrap()).toEqual([[new Control(), new Control()], [new target()]]);
         });
 
-        test("should generate the correct underlying Controls", () =>
+        test(" generates the correct underlying Controls", () =>
         {
             const state = 1;
             const objUnwrapped = new gate(state).unwrap();
@@ -155,7 +155,7 @@ for (const { gate, target } of [
             expect([ctrl1.activeDiagonal(), ctrl2.activeDiagonal()]).toEqual([3, 0]);
         });
 
-        test(`should be equal to a ${target.name} controlled twice`, () =>
+        test(` equals a ${target.name} controlled twice`, () =>
         {
             const obj = new gate();
             const twoCtrlTarget = new target().control(1).control(1);
@@ -164,9 +164,9 @@ for (const { gate, target } of [
         });
     });
 
-describe("MCXGate", () =>
+describe("MCXGate ", () =>
 {
-    test("should unwrap to m controls and an XGate", () =>
+    test("unwraps to m controls and 1 X", () =>
     {
         const m = 5
         const mcx = new MCX(m);
@@ -175,7 +175,7 @@ describe("MCXGate", () =>
         expect(mcx.unwrap()).toEqual([controls, [new X()]]);
     });
 
-    test("should be equal to an XGate for 0 controls", () => 
+    test("equals an X for 0 controls", () => 
     {
         const x   = new X();
         const mcx = new MCX(0);
@@ -183,7 +183,7 @@ describe("MCXGate", () =>
         expect(mcx.unwrap()).toEqual(x.unwrap());
     });
 
-    test("should be equal to a CXGate for 1 control", () =>
+    test("equals a CX for 1 control", () =>
     {
         const cx  = new CX();
         const mcx = new MCX(1);
@@ -191,7 +191,7 @@ describe("MCXGate", () =>
         expect(mcx.unwrap()).toEqual(cx.unwrap());
     });
 
-    test("should be equal to a CCXGate for 2 controls", () => 
+    test("equals a CCX for 2 controls", () => 
     {
         const state = '10';
         const ccx = new CCX(state);
@@ -200,7 +200,7 @@ describe("MCXGate", () =>
         expect(mcx.unwrap()).toEqual(ccx.unwrap());
     });
 
-    test("should be equal to an XGate controlled m times", () =>
+    test("equals an X controlled m times", () =>
     {
         const m = 5;
         const state = Math.ceil(m / 2).toString(2).padStart(m, '0');
@@ -210,16 +210,16 @@ describe("MCXGate", () =>
         expect(mcx.unwrap()).toEqual(mControlledX.unwrap());
     });
 
-    describe("should throw for", () =>
+    describe("throws for:", () =>
     {
-        test("incorrect control state type", () =>
+        test("\nIncorrect control state type", () =>
         {
             // @ts-expect-error
             expect(() => { new MCX(3, true)})
             .toThrow("Invalid input type for ctrlState in ControlledGate (expected {string, number, undefined}, got boolean).");
         });
     
-        describe("invalid control state string:", () =>
+        describe("\nInvalid control state string:", () =>
         {
             test("\nNon-bit character", () =>
             {
@@ -234,7 +234,7 @@ describe("MCXGate", () =>
             });
         });
     
-        describe("invalid controls number:", () =>
+        describe("\nInvalid controls number:", () =>
         {
             test("\nFloat number of controls", () =>
             {
@@ -249,13 +249,13 @@ describe("MCXGate", () =>
             });
         });
     
-        test("attempting to fetch its matrix", () =>
+        test("\nAttempting to fetch its matrix", () =>
         {
             expect(() => { new MCX(2).matrix(); })
             .toThrow("MCX class doesn't implement matrix().");
         });
     
-        describe("invalid control state number:", () =>
+        describe("\nInvalid control state number:", () =>
         {
             test("\nFloat number for control state", () => 
             {

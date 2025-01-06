@@ -1,12 +1,31 @@
-import { QuantumCircuit } from '../src/index';
-import { zip } from '../src/utils/iterators';
-import { CCX, Control, CX, H, I, S, X, Y,  } from '../src/circuit/gates';
+import { QuantumCircuit } from '../src/circuit';
+import { Complex } from '../src/complex';
+import { CCX, Control, CX, H, I, S, X, Y,  } from '../src/gates';
+import { QMDD } from '../src/qmdd';
 
+/**
+ * Square root of a half rounded to 4 decimals.
+ */
 const a = Math.round(Math.sqrt(0.5) * 10000) / 10000;
 
-describe("QuantumCircuit", () => 
+/**
+ * Traverses two `ArrayLike Iterable`s of equal length at the same time, yielding their elements
+ * at corresponding positions together as a tuple.
+ * @param arr1 The first `Iterable`.
+ * @param arr2 The second `Iterable`.
+ * @throws if `arr1.length !== arr2.length`.
+ */
+function* zip <T, K> (arr1: ArrayLike<T>, arr2: ArrayLike<K>): Generator<[T, K]>
 {
-    describe("should throw for abnormal number of qubits:", () =>
+    if (arr1.length !== arr2.length) throw new Error('Unequal arrays.');
+
+    for (let i = 0; i < arr1.length; i++)
+        yield [arr1[i], arr2[i]];
+}
+
+describe("QuantumCircuit:", () => 
+{
+    describe("Abnormal number of qubits:", () =>
     {
         test("\nNon-numerical input", () =>
         {
@@ -28,7 +47,7 @@ describe("QuantumCircuit", () =>
         });
     });
 
-    test("should return the correct information for width and depth", () => 
+    test(".width() and .depth() check", () => 
     {
         const qc     = new QuantumCircuit(2);
         const width  = qc.width();
@@ -40,7 +59,7 @@ describe("QuantumCircuit", () =>
         expect([width, width1, depth, depth1, depth2]).toEqual([2, 2, 0, 1, 2]);
     });
 
-    test("should correctly append gates", () => 
+    test("Appending gates", () => 
     {
         const qc = 
             new QuantumCircuit(2)
@@ -56,7 +75,7 @@ describe("QuantumCircuit", () =>
                 expect(received === expected).toBe(true);
     });
 
-    test("should throw for wrong Gate input in append()", () =>
+    test("Wrong Gate input in .append()", () =>
     {
         const qc = new QuantumCircuit(1);
 
@@ -65,7 +84,7 @@ describe("QuantumCircuit", () =>
         .toThrow("Invalid input type for gate in QuantumCircuit.append (expected a Gate, got string).");
     });
 
-    describe("should throw for wrong qubit index input in append():", () =>
+    describe("Wrong qubit index input in .append():", () =>
     {
         test("\nFewer than expected", () =>
         {
@@ -113,7 +132,7 @@ describe("QuantumCircuit", () =>
         });
     });
 
-    describe("should throw for invalid inputs in initialize():", () =>
+    describe("Invalid inputs in .initialize():", () =>
     {
         test("\nNon-string initial state", () =>
         {
@@ -153,38 +172,31 @@ describe("QuantumCircuit", () =>
         });
     });
 
-    describe("should throw for invalid inputs in statevector():", () =>
+    describe("Invalid input in .statevector():", () =>
     {
-        test("\nUnexpected output specification", () =>
-        {
-            // @ts-expect-error
-            expect(() => { new QuantumCircuit(1).statevector('lmaoo'); })
-            .toThrow("Invalid output type in QuantumCircuit.statevector (expected {'generator', 'record'}, got lmaoo).");
-        });
-
         test("\nNon-numerical decimal specification", () =>
         {
             // @ts-expect-error
-            expect(() => { new QuantumCircuit(1).statevector('record', 'lmaoo'); })
+            expect(() => { new QuantumCircuit(1).statevector('lmaoo'); })
             .toThrow("Invalid input in QuantumCircuit.statevector: Can't round to lmaoo decimal places.");
         });
 
         test("\nNegative number decimal specification", () =>
         {
-            expect(() => { new QuantumCircuit(1).statevector('record', -1); })
+            expect(() => { new QuantumCircuit(1).statevector(-1); })
             .toThrow("Invalid input in QuantumCircuit.statevector: Can't round to -1 decimal places.");
         });
 
         test("\nFloat number decimal specification", () =>
         {
-            expect(() => { new QuantumCircuit(1).statevector('record', 2.5); })
+            expect(() => { new QuantumCircuit(1).statevector(2.5); })
             .toThrow("Invalid input in QuantumCircuit.statevector: Can't round to 2.5 decimal places.");
         });
     });
 
-    describe("should correctly initialize to a given", () =>
+    describe("Initializing:", () =>
     {
-        test("string state at the back of a circuit", () => 
+        test("\nString state at the back of a circuit", () => 
         {
             const qc = new QuantumCircuit(6).initialize('lr-+10');
     
@@ -197,7 +209,7 @@ describe("QuantumCircuit", () =>
                     expect(received === expected).toBe(true);
         });
 
-        test("string state at the front of a circuit", () => 
+        test("\nString state at the front of a circuit", () => 
         {
             const qc = 
                 new QuantumCircuit(2)
@@ -213,7 +225,7 @@ describe("QuantumCircuit", () =>
                     expect(received === expected).toBe(true);
         });
 
-        test("number state", () =>
+        test("\nNumber state", () =>
         {
             const qc = 
                 new QuantumCircuit(3)
@@ -227,9 +239,9 @@ describe("QuantumCircuit", () =>
         });
     });
 
-    describe("should correctly apply", () =>
+    describe("Applying gates:", () =>
     {
-        test("SWAP gates", () => 
+        test("\nSWAP", () => 
         {
             const qc = 
                 new QuantumCircuit(3)
@@ -248,7 +260,7 @@ describe("QuantumCircuit", () =>
                     expect(received === expected).toBe(true);
         });
 
-        test("Fredkin gates", () => 
+        test("\nFredkin", () => 
         {
             const qc = 
                 new QuantumCircuit(3)
@@ -262,188 +274,202 @@ describe("QuantumCircuit", () =>
                 for (const [received, expected] of zip(recStep, expStep))
                     expect(received === expected).toBe(true);
         });
+
+        test("\nT", () =>
+        {
+            const qc = new QuantumCircuit(1).x(0).t(0);
+
+            expect([...qc.statevector()]).toEqual([{ state: '1', real: a, imag: a }]);
+        });
     });
 
-    describe("should correctly execute", () =>
+    describe("Executing:", () =>
     {
         for (const [state, sv] of zip('01+-rl', [
-            { '0': { real: 1, imag: 0 }},
-            { '1': { real: 1, imag: 0 }},
-            { '0': { real: a, imag: 0 }, '1': { real:  a, imag:  0 }},
-            { '0': { real: a, imag: 0 }, '1': { real: -a, imag:  0 }},
-            { '0': { real: a, imag: 0 }, '1': { real:  0, imag:  a }},
-            { '0': { real: a, imag: 0 }, '1': { real:  0, imag: -a }},
-        ]))
-            test(`an empty circuit, initialized on ${state}`, () =>
+            [{ state: '0', real: 1, imag: 0 }],
+            [{ state: '1', real: 1, imag: 0 }],
+            [{ state: '0', real: a, imag: 0 }, { state: '1', real:  a, imag:  0 }],
+            [{ state: '0', real: a, imag: 0 }, { state: '1', real: -a, imag:  0 }],
+            [{ state: '0', real: a, imag: 0 }, { state: '1', real:  0, imag:  a }],
+            [{ state: '0', real: a, imag: 0 }, { state: '1', real:  0, imag: -a }]]
+        ))
+            test(`\nEmpty circuit initialized on ${state}`, () =>
             {
-                const qc = 
-                    new QuantumCircuit(1)
-                    .initialize(state);
+                const qc = new QuantumCircuit(1).initialize(state);
 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
-        test("a completely empty circuit", () =>
+        test("\nCompletely empty circuit", () =>
         {
             const qc = new QuantumCircuit(5);
 
-            expect(qc.statevector('record')).toEqual({ '00000': { real: 1, imag: 0 }});
+            expect([...qc.statevector()]).toEqual([{ state: '00000', real: 1, imag: 0 }]);
         });
 
-        for (const [i, sv] of [{ '1': { real: 1, imag: 0 }}, { '0': { real:  1, imag:  0 }}].entries())
-            test(`.x() for the initial state ${i}`, () =>
+        for (const [i, sv] of [
+            [{ state: '1', real: 1, imag: 0 }],
+            [{ state: '0', real: 1, imag: 0 }]]
+        .entries())
+            test(`\n.x() for the initial state ${i}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(1)
                     .initialize(i.toString())
                     .x(0);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
-        for (const [i, sv] of [{ '1': { real: 0, imag: 1 }}, { '0': { real:  0, imag: -1 }}].entries())
-            test(`.y() for the initial state ${i}`, () =>
+        for (const [i, sv] of [
+            [{ state: '1', real: 0, imag:  1 }],
+            [{ state: '0', real: 0, imag: -1 }]]
+        .entries())            
+            test(`\n.y() for the initial state ${i}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(1)
                     .initialize(i.toString())
                     .y(0);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
-        for (const [i, sv] of [{ '0': { real: 1, imag: 0 }}, { '1': { real: -1, imag:  0 }}].entries())
-            test(`.z() for the initial state ${i}`, () =>
+        for (const [i, sv] of [
+            [{ state: '0', real:  1, imag: 0 }],
+            [{ state: '1', real: -1, imag: 0 }]]
+        .entries())
+            test(`.\nz() for the initial state ${i}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(1)
                     .initialize(i.toString())
                     .z(0);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
-        for (const [i, sv] of [{ '0': { real: 1, imag: 0 }}, { '1': { real:  0, imag:  1 }}].entries())
-            test(`.s() for the initial state ${i}`, () =>
+        for (const [i, sv] of [
+            [{ state: '0', real: 1, imag: 0 }],
+            [{ state: '1', real: 0, imag: 1 }]]
+        .entries())
+            test(`\n.s() for the initial state ${i}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(1)
                     .initialize(i.toString())
                     .s(0);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
         
         for (const [i, sv] of [
-            { '0': { real: a, imag: 0 }, '1': { real: a,  imag: 0 }},
-            { '0': { real: a, imag: 0 }, '1': { real: -a, imag: 0 }}
-        ].entries())
-            test(`.h() for the initial state ${i}`, () =>
+            [{ state: '0', real: a, imag: 0 }, { state: '1', real: a,  imag: 0 }],
+            [{ state: '0', real: a, imag: 0 }, { state: '1', real: -a, imag: 0 }]]
+        .entries())
+            test(`\n.h() for the initial state ${i}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(1)
                     .initialize(i.toString())
                     .h(0);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
         for (const [i, sv] of [
-            { '00': { real: 1, imag: 0 } }, 
-            { '11': { real: 1, imag: 0 } },
-            { '10': { real: 1, imag: 0 } }, 
-            { '01': { real: 1, imag: 0 } }
+            [{ state: '00', real: 1, imag: 0 }], 
+            [{ state: '11', real: 1, imag: 0 }],
+            [{ state: '10', real: 1, imag: 0 }], 
+            [{ state: '01', real: 1, imag: 0 }]
         ].entries())
-            test(`.cx() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
+            test(`\n.cx() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(2)
                     .initialize(i.toString(2).padStart(2, '0'))
                     .cx(0, 1);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
         for (const [i, sv] of [
-            { '00': { real: 1, imag:  0 } }, 
-            { '11': { real: 0, imag:  1 } }, 
-            { '10': { real: 1, imag:  0 } }, 
-            { '01': { real: 0, imag: -1 } }
-        ].entries())
-            test(`.cy() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
+            [{ state: '00', real: 1, imag:  0 }], 
+            [{ state: '11', real: 0, imag:  1 }], 
+            [{ state: '10', real: 1, imag:  0 }], 
+            [{ state: '01', real: 0, imag: -1 }]]
+        .entries())
+            test(`\n.cy() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(2)
                     .initialize(i.toString(2).padStart(2, '0'))
                     .cy(0, 1);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
         for (const [i, sv] of [
-            { '00': { real:  1, imag: 0 } }, 
-            { '01': { real:  1, imag: 0 } }, 
-            { '10': { real:  1, imag: 0 } }, 
-            { '11': { real: -1, imag: 0 } }
-        ].entries())
-            test(`.cz() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
+            [{ state: '00', real:  1, imag: 0 }], 
+            [{ state: '01', real:  1, imag: 0 }], 
+            [{ state: '10', real:  1, imag: 0 }], 
+            [{ state: '11', real: -1, imag: 0 }]]
+        .entries())
+            test(`\n.cz() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(2)
                     .initialize(i.toString(2).padStart(2, '0'))
                     .cz(0, 1);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
         for (const [i, sv] of [
-            { '00': { real: 1, imag: 0 } }, 
-            { '01': { real: 1, imag: 0 } }, 
-            { '10': { real: 1, imag: 0 } }, 
-            { '11': { real: 0, imag: 1 } }
-        ].entries())
-            test(`.cs() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
+            [{ state: '00', real: 1, imag: 0 }], 
+            [{ state: '01', real: 1, imag: 0 }], 
+            [{ state: '10', real: 1, imag: 0 }], 
+            [{ state: '11', real: 0, imag: 1 }]]
+        .entries())
+            test(`\n.cs() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(2)
                     .initialize(i.toString(2).padStart(2, '0'))
                     .cs(0, 1);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
         
         for (const [i, sv] of [
-            { '00': { real: 1, imag: 0 } }, 
-            { '01': { real: a, imag: 0 }, '11': { real: a,  imag: 0 } }, 
-            { '10': { real: 1, imag: 0 } }, 
-            { '01': { real: a, imag: 0 }, '11': { real: -a, imag: 0 }}
-        ].entries())
-            test(`.ch() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
+            [{ state: '00', real: 1, imag: 0 }], 
+            [{ state: '01', real: a, imag: 0 }, { state: '11', real: a,  imag: 0 }], 
+            [{ state: '10', real: 1, imag: 0 }], 
+            [{ state: '01', real: a, imag: 0 }, { state: '11', real: -a, imag: 0 }]]
+        .entries())
+            test(`\n.ch() for the initial state ${i.toString(2).padStart(2, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(2)
                     .initialize(i.toString(2).padStart(2, '0'))
                     .ch(0, 1);
                 
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual(sv);
             });
 
         for (const [i , state] of ['00', '10', '01', '11'].entries())
-            test(`.swap() for initial state ${i.toString(2).padStart(2, '0')}`, () => 
+            test(`\n.swap() for initial state ${i.toString(2).padStart(2, '0')}`, () => 
             {
                 const qc = 
                     new QuantumCircuit(2)
                     .initialize(i.toString(2).padStart(2, '0'))
                     .swap(0, 1);
-    
-                const sv: Record<string, { real: number, imag: number }> = {};
-                sv[state] = { real: 1, imag: 0 };
-    
-                expect(qc.statevector('record')).toEqual(sv);
+        
+                expect([...qc.statevector()]).toEqual([{ state: state, real: 1, imag: 0 }]);
             });
 
         for (const [i, state] of ['000', '001', '010', '111', '100', '101', '110', '011'].entries())
-            test(`.ccx() for initial state ${i.toString(2).padStart(3, '0')}`, () =>
+            test(`\n.ccx() for initial state ${i.toString(2).padStart(3, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(3)
@@ -451,79 +477,66 @@ describe("QuantumCircuit", () =>
 
                 // this is stupid but Jest insists on both methods be checked and i don't want to silence .toffoli
                 if (i < 4) qc.ccnot(0, 1, 2); else qc.toffoli(0, 1, 2);
-
-                const sv: Record<string, { real: number, imag: number }> = {};
-                sv[state] = { real: 1, imag: 0 };
     
-                expect(qc.statevector('record')).toEqual(sv);               
+                expect([...qc.statevector()]).toEqual([{ state: state, real: 1, imag: 0 }]);               
             });
 
         for (const [i, state] of ['000', '001', '010', '011', '100', '101', '110', '111'].entries())
-            test(`.ccz() for initial state ${i.toString(2).padStart(3, '0')}`, () =>
+            test(`\n.ccz() for initial state ${i.toString(2).padStart(3, '0')}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(3)
                     .initialize(i.toString(2).padStart(3, '0'))
                     .ccz(0, 1, 2);
                     
-                const sv: Record<string, { real: number, imag: number }> = {};
-                sv[state] = { real: i === 7 ? -1 : 1, imag: 0 };
-
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual([{ state: state, real: i === 7 ? -1 : 1, imag: 0 }]);
             });
 
         for (const [i, state] of ['000', '001', '100', '011', '010', '101', '110', '111'].entries())
-            test(`.fredkin() for initial state ${i.toString(2).padStart(3, '0')}, conditioned on 0`, () =>
+            test(`\n.fredkin() for initial state ${i.toString(2).padStart(3, '0')}, conditioned on 0`, () =>
             {
                 const qc = 
                     new QuantumCircuit(3)
                     .initialize(i.toString(2).padStart(3, '0'))
                     .fredkin(0, 1, 2, '0');
 
-                const sv: Record<string, { real: number, imag: number }> = {};
-                sv[state] = { real: 1, imag: 0 };
-
-                expect(qc.statevector('record')).toEqual(sv);
+                expect([...qc.statevector()]).toEqual([{ state: state, real: 1, imag: 0 }]);
             });
 
         for (const { state, out } of [
             { state: '10000', out: '11000' },
             { state: '00100', out: '00100' },
         ])
-            test(`.mcx() for initial state ${state}, conditioned on 0`, () => 
+            test(`\n.mcx() for initial state ${state}, conditioned on 0`, () => 
             {
                 const qc = 
                     new QuantumCircuit(5)
                     .initialize(state)
                     .mcx([0, 1, 2], 3, 0);
-    
-                const sv: Record<string, { real: number, imag: number }> = {};
-                sv[out] = { real: 1, imag: 0 };
-    
-                expect(qc.statevector('record')).toEqual(sv);
+        
+                expect([...qc.statevector()]).toEqual([ { state: out, real: 1, imag: 0 }]);
             });
 
-        test(".mcx() with target in between the controls", () =>
+        test("\n.mcx() with target in between the controls", () =>
         {
             const qc = 
                 new QuantumCircuit(4)
                 .initialize('1111')
                 .mcnot([0, 1, 3], 2);
             
-            expect(qc.statevector('record')).toEqual({ '1011': { real: 1, imag: 0 }});
+            expect([...qc.statevector()]).toEqual([{ state: '1011', real: 1, imag: 0 }]);
         });
     });
 
-    test("should calculate the correct statevector for the Hadamard transform", () => 
+    test("Hadamard transform with lazy iteration", () => 
     {
         const qc = 
             new QuantumCircuit(2)
             .h(0).h(1);
         
-        let i = 0;
         const states = ['00', '01', '10', '11'];
 
-        for (const [state, real, imag] of qc.statevector())
+        for (const { state, real, imag } of qc.statevector())
         {
             const i = states.findIndex(el => el === state);
 
@@ -535,12 +548,12 @@ describe("QuantumCircuit", () =>
     });
 
     for (const { order, state, sv } of [
-        { order: 'first',  state: '00', sv: { '00': { real: a, imag: 0 }, '11': { real:  a, imag: 0 } }},
-        { order: 'second', state: '01', sv: { '00': { real: a, imag: 0 }, '11': { real: -a, imag: 0 } }},
-        { order: 'third',  state: '10', sv: { '01': { real: a, imag: 0 }, '10': { real:  a, imag: 0 } }},
-        { order: 'fourth', state: '11', sv: { '10': { real: a, imag: 0 }, '01': { real: -a, imag: 0 } }}
+        { order: 'First',  state: '00', sv: [{ state: '00', real: a, imag: 0 }, { state: '11', real:  a, imag: 0 }] },
+        { order: 'Second', state: '01', sv: [{ state: '00', real: a, imag: 0 }, { state: '11', real: -a, imag: 0 }] },
+        { order: 'Third',  state: '10', sv: [{ state: '10', real: a, imag: 0 }, { state: '01', real:  a, imag: 0 }] },
+        { order: 'Fourth', state: '11', sv: [{ state: '10', real: a, imag: 0 }, { state: '01', real: -a, imag: 0 }] }
     ])
-        test(`should correctly generate the ${order} Bell state`, () => 
+        test(`\n${order} Bell state`, () => 
         {
             const qc = 
                 new QuantumCircuit(2)
@@ -548,10 +561,10 @@ describe("QuantumCircuit", () =>
                 .h(0)
                 .cnot(0, 1);
 
-            expect(qc.statevector('record')).toEqual(sv);
+            expect([...qc.statevector()]).toEqual(sv);
         });
 
-    test("should correctly generate the 4-qubit GHZ state", () => 
+    test("\n4-qubit GHZ state", () => 
     {
         const qc = 
             new QuantumCircuit(4)
@@ -560,9 +573,24 @@ describe("QuantumCircuit", () =>
             .cx(1, 2)
             .cx(2, 3);
 
-        expect(qc.statevector('record')).toEqual({
-            '0000': { real: a, imag: 0 },
-            '1111': { real: a, imag: 0 }
-        });
+        expect([...qc.statevector()]).toEqual([
+            { state: '0000', real: a, imag: 0 },
+            { state: '1111', real: a, imag: 0 }]);
+    });
+
+    test("\nHadamard-controlled NOT", () =>
+    {
+        const b = Math.round(a * a * 10_000) / 10_000;
+        const qc = 
+            new QuantumCircuit(2)
+            .h(0)
+            .cnot(0, 1)
+            .h(0);
+
+        expect([...qc.statevector()]).toEqual([
+            { state: '00', real:  b, imag: 0 },
+            { state: '10', real:  b, imag: 0 },
+            { state: '01', real:  b, imag: 0 },
+            { state: '11', real: -b, imag: 0 }]);
     });
 });

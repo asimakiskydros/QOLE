@@ -19,3 +19,7 @@ Thumbs.db
 coverage/
 
 jest-logs/
+
+experiment/
+
+legacy/

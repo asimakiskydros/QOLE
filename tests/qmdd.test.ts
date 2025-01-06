@@ -1,807 +1,613 @@
-import Complex from 'complex.js';
-import { Vertex, Edge, QMDD } from '../src/execution/qmdd';
-import { Control, H, I, X } from '../src/circuit/gates';
-import { zip } from '../src/utils/iterators';
+import { Complex } from "../src/complex";
+import { Control, H, I, X } from "../src/gates";
+import { QMDD } from "../src/qmdd";
 
-const a = Math.sqrt(0.5);
-
-describe("Vertex", () =>
+describe('QMDD: ', () =>
 {
-    test("should be terminal for an empty call", () =>
+    test('Vertices self-normalize', () =>
     {
-        expect(new Vertex().terminal()).toBe(true);
+        const terminal = new QMDD();
+        const y = new QMDD(1, [
+            { dest: terminal, weight: 0  },
+            { dest: terminal, weight: Complex.NEG_I },
+            { dest: terminal, weight: Complex.I     },
+            { dest: terminal, weight: 0  }]);
+
+        expect(y.scalar).toBe(Complex.NEG_I);
+        expect(y.edges.map(e => e.weight)).toEqual([0, 1, Complex.NEG_ONE, 0]);
     });
 
-    describe("should not be terminal when", () =>
+    test('Identical vertices merge', () =>
     {
-        const terminal = new Vertex();
-        const v1 = new Vertex(0, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-        ]);
-        const v2 = new Vertex(1, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(v1, Complex.ONE),
-            new Edge(v1, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-        ]);
+        const terminal = new QMDD();
+        const y0 = new QMDD(0, [
+            { dest: terminal, weight: 0  },
+            { dest: terminal, weight: Complex.NEG_I },
+            { dest: terminal, weight: Complex.I     },
+            { dest: terminal, weight: 0  }]);
+        const y1 = new QMDD(0, [
+            { dest: terminal, weight: 0  },
+            { dest: terminal, weight: Complex.NEG_I },
+            { dest: terminal, weight: Complex.I     },
+            { dest: terminal, weight: 0  }]);
 
-        test("pointing to the terminal Vertex", () =>
-        {
-            expect(v1.terminal()).toBe(false);
-        });
-
-        test("pointing to a Vertex which points to the terminal Vertex", () =>
-        {
-            expect(v2.terminal()).toBe(false);
-        });
+        expect(y0.id).toBe(y1.id);
+        expect(y0 === y1).toBe(true);
     });
 
-    describe("should precede another Vertex when", () =>
+    test('Identity branches bubble up the scalar', () =>
     {
-        test("it has a greater variable index", () =>
-        {
-            expect(new Vertex(2).precedes(new Vertex(1))).toBe(true);
-        });
-
-        test("it has an undefined variable index but the other doesn't", () =>
-        {
-            expect(new Vertex().precedes(new Vertex(0))).toBe(true);
-        });
+        const terminal = new QMDD();
+        const i1 = new QMDD(1, [
+            { dest: terminal, weight: Complex.I },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: Complex.I }]);
+        const i0 = new QMDD(0, [
+            { dest: i1,       weight: Complex.I },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: i1,       weight: Complex.I }]);
+        
+        expect(i0.isIdentity).toBe(true);
+        expect(i0.scalar).toBe(Complex.NEG_ONE);
+        expect(i1.scalar).toBe(1);
     });
 
-    describe("should not precede another Vertex when", () =>
+    test('Redundant vertices are skipped', () =>
     {
-        test("it has a lesser variable index", () =>
-        {
-            expect(new Vertex(1).precedes(new Vertex(2))).toBe(false);
-        });
+        const terminal = new QMDD();
+        const e0 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I }])};
+        const e1 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 }])};
+        const sum = QMDD.add(e0, e1);
 
-        test("they have the same variable index", () =>
-        {
-            expect(new Vertex(1).precedes(new Vertex(1))).toBe(false);
-        });
+        expect(sum.dest.isTerminal()).toBe(true);
+        expect(sum.weight).toBe(Complex.I);
+    });
 
-        test("both of them have undefined variable indeces", () =>
-        {
-            expect(new Vertex().precedes(new Vertex())).toBe(false);
-        });
+    test('Hadamard-CNOT QMDD skips a variable', () =>
+    {
+        const terminal = new QMDD();
+        const i = new QMDD(1, [
+            { dest: terminal, weight: 1 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 1 }]);
+        const hi = new QMDD(0, [
+            { dest: i, weight: Complex.A },
+            { dest: i, weight: Complex.A },
+            { dest: i, weight: Complex.A },
+            { dest: i, weight: Complex.NEG_A }]);
+        const x = new QMDD(1, [
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 1 },
+            { dest: terminal, weight: 1 },
+            { dest: terminal, weight: 0 }]);
+        const cx = new QMDD(0, [
+            { dest: i,        weight: 1 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: x,        weight: 1 }]);
 
-        test("it has a defined variable index but the other doesn't", () =>
-        {
-            expect(new Vertex(1).precedes(new Vertex())).toBe(false);
-        });
+        const e = QMDD.mul(
+            QMDD.mul({ dest: hi, weight: 1 }, { dest: cx, weight: 1}), { dest: hi, weight: 1 });
+
+        expect(e.dest.edges.map(v => v.dest.isTerminal())).toEqual([true, false, false, true]);
+    });
+
+    test('Scaled identities are labeled as such', () =>
+    {
+        const terminal = new QMDD();
+        const i0 = new QMDD(0, [
+            { dest: terminal, weight: Complex.I },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: Complex.I }]);
+
+        expect(i0.isIdentity).toBe(true);
+    });
+
+    test('Construction: \nEmpty circuit', () =>
+    {
+        const e = QMDD.build([], 0);
+
+        expect(e.dest.isTerminal()).toBe(true);
+        expect(e.weight).toBe(Complex.ONE);
     });
 });
 
-describe("Edge", () =>
+describe('QMDD: Identity vertices self-label: \nIdentity branch grows progressively:', () =>
 {
-    describe("(when adding 0-edges together) should return an edge which", () =>
+    const terminal = new QMDD();
+    const i1 = new QMDD(1, [
+        { dest: terminal, weight: 1 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 1 }]);
+    const i0 = new QMDD(0, [
+        { dest: i1,       weight: 1 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 0 },
+        { dest: i1,       weight: 1 }]);
+
+    test('\nFirst layer is an identity',  () => { expect(terminal.isIdentity).toBe(true); });    
+    test('\nSecond layer is an identity', () => { expect(i1.isIdentity).toBe(true); });
+    test('\nThird layer is an identity',  () => { expect(i0.isIdentity).toBe(true); });
+});
+
+describe('QMDD: Identity vertices self-label: \nIdentity branch cut in the middle:', () =>
+{
+    const terminal = new QMDD();
+    const i2 = new QMDD(2, [
+        { dest: terminal, weight: 1 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 1 }]);
+    const x1 = new QMDD(1, [
+        { dest: terminal, weight: 0 },
+        { dest: i2,       weight: 1 },
+        { dest: i2,       weight: 1 },
+        { dest: terminal, weight: 0 }]);            
+    const i0 = new QMDD(0, [
+        { dest: x1,       weight: 1 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 0 },
+        { dest: x1,       weight: 1 }]);
+
+    test('\nFirst layer is an identity',  () => { expect(i2.isIdentity).toBe(true);  });
+    test('\nSecond layer is an identity', () => { expect(x1.isIdentity).toBe(false); });
+    test('\nThird layer is an identity',  () => { expect(i0.isIdentity).toBe(false); });
+});
+
+describe('QMDD: Addition: ', () =>
+{
+    test('\nSums are cached', () =>
     {
-        const terminal = new Vertex();
-
-        const e0 = new Edge(terminal, Complex.ZERO);
-        const e1 = new Edge(terminal, Complex.ZERO);
-
-        const sum = e0.add(e1);
-
-        test("points to the terminal", () =>
-        {
-            expect(sum.pointsTo === terminal).toBe(true);
-        });
-
-        test("has zero weight", () =>
-        {
-            expect(sum.weight.equals(Complex.ZERO)).toBe(true);
-        });
+        const terminal = new QMDD();
+        const e0 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I }])};
+        const e1 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 }])};
+        const sum0 = QMDD.add(e0, e1);
+        const sum1 = QMDD.add(e0, e1);
+        
+        expect(sum1).toEqual(sum0);
+        expect(sum1.dest.id).toBe(sum0.dest.id);
     });
 
-    describe("(when adding terminal edges together where one is a 0-edge) should return an edge which", () =>
+    test('\n0-edges are the neutral element', () =>
     {
-        const terminal = new Vertex();
-
-        const e0 = new Edge(terminal, Complex.ZERO);
-        const e1 = new Edge(terminal, Complex.ONE);
-
-        const sum1 = e0.add(e1);
-        const sum2 = e1.add(e0);
-
-        test("has the non-0 weight", () =>
-        {
-            expect(sum1.weight.equals(Complex.ONE)).toBe(true);
-            expect(sum2.weight.equals(Complex.ONE)).toBe(true);
-        });
-
-        test("points to the terminal", () =>
-        {
-            expect(sum1.pointsTo === terminal).toBe(true);
-            expect(sum2.pointsTo === terminal).toBe(true);    
-        });
-
-        test("is qualitative equal to the original non-0-edge", () =>
-        {
-            expect(sum1).toStrictEqual(e1);
-            expect(sum2).toStrictEqual(e1);
-        });
+        const terminal = new QMDD();
+        const e0 = { dest: terminal, weight: 0 };
+        const e1 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 }])};
+            
+        expect(QMDD.add(e0, e1)).toStrictEqual(e1);
     });
 
-    test("(when adding a 0-edge and a non-terminal edge together) should return a copy of the non-terminal edge", () => 
+    test('\nCommutativity is respected', () =>
     {
-        const terminal = new Vertex();
-        const x1 = new Vertex(1, [
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-        ]);
-        const x0 = new Vertex(0, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(x1, Complex.ONE),
-            new Edge(x1, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-        ]);
+        const terminal = new QMDD();
+        const h = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: Complex.A },
+                { dest: terminal, weight: Complex.A },
+                { dest: terminal, weight: Complex.A },
+                { dest: terminal, weight: Complex.NEG_A }])};
+        const x = {
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: 1 },
+                { dest: terminal, weight: 1 },
+                { dest: terminal, weight: 0 }])};
+        const sum1 = QMDD.add(h, x);
+        const sum2 = QMDD.add(x, h);
 
-        const e0 = new Edge(x0, Complex.ONE);
-        const e1 = new Edge(terminal, Complex.ZERO);
-
-        expect(e0.add(e1)).toStrictEqual(e0);
+        expect({ id: sum1.dest.id, weight: sum1.weight })
+        .toEqual({ id: sum2.dest.id, weight: sum2.weight });
     });
 
-    describe("should merge compatible Verteces correctly; the output should", () =>
+    test('\nAdding an element to itself', () =>
     {
-        const terminal = new Vertex();
-        const x0 = new Vertex(0, [
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-        ]);
-        const x1 = new Vertex(0, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-        ]);
+        const terminal = new QMDD();
+        const h = new QMDD(0, [
+            { dest: terminal, weight: Complex.A },
+            { dest: terminal, weight: Complex.A },
+            { dest: terminal, weight: Complex.A },
+            { dest: terminal, weight: Complex.NEG_A }]);
+        const sum = QMDD.add({ dest: h, weight: 1 }, { dest: h, weight: Complex.I });
 
-        const e0 = new Edge(x0, Complex.ONE);
-        const e1 = new Edge(x1, Complex.ONE);
-        const sum = e0.add(e1);
-
-        test("have entry weight the product of the old entry weights", () =>
-        {
-            expect(sum.weight.equals(Complex.ONE)).toBe(true);
-        });
-
-        test("maintain the variable index", () =>
-        {
-            expect(sum.pointsTo.variable).toBe(0);
-        });
-
-        for (const [i, weight] of [Complex.ONE, Complex.ONE, Complex.ONE, Complex.ONE].entries())
-            {
-                test("maintain the destination of each edge", () =>
-                {
-                    expect(sum.pointsTo.edges[i].pointsTo === terminal).toBe(true);
-                });
-
-                test("maintain the weight of each edge", () =>
-                {
-                    expect(sum.pointsTo.edges[i].weight.equals(weight)).toBe(true);
-                });
-            }
-    });
-
-    describe("should unify pointed diagrams correctly; the output should", () =>
-    {
-        const terminal = new Vertex();
-        const x10 = new Vertex(1, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-        ]);
-        const x00 = new Vertex(0, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(x10, Complex.ONE),
-        ]);
-        const e0 = new Edge(x00, Complex.ONE);
-
-        const x11 = new Vertex(1, [
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-        ]);
-        const x01 = new Vertex(0, [
-            new Edge(x11, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-        ]);
-        const e1 = new Edge(x01, Complex.ONE);
-
-        const sum = e0.add(e1);
-
-        test("have entry weight the product of the old entry weights", () =>
-        {
-            expect(sum.weight.equals(Complex.ONE)).toBe(true);
-        });
-
-        test("maintain variable indeces", () =>
-        {
-            expect(sum.pointsTo.variable).toBe(0);
-        });
-
-        for (const [i, vertex, weight] of zip(
-            [x11, terminal, terminal, x10], 
-            [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ONE], true))
-        {
-            test("maintain the destination of each non-terminal edge", () =>
-            {
-                expect(sum.pointsTo.edges[i].pointsTo === vertex).toBe(true);
-            });
-
-            test("preserve the weight of each non-terminal edge", () => 
-            {
-                expect(sum.pointsTo.edges[i].weight.equals(weight)).toBe(true);
-            });
-        }
-    });
-
-    describe("(when multiplying anything to a 0-edge) should yield the 0-edge,", () =>
-    {
-        const terminal = new Vertex();
-        const e0 = new Edge(terminal, Complex.ZERO);
-        const e1 = new Edge(terminal, Complex.ONE);
-        const x = new Vertex(0, [
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-        ]);
-        const e2 = new Edge(x, Complex.ONE);
-
-        test("no matter the depth", () =>
-        {
-            expect(e0.multiply(e1)).toStrictEqual(e0);
-        });
-
-        test("no matter the order", () =>
-        {
-            expect(e1.multiply(e0)).toStrictEqual(e0);
-        });
-
-        test("no matter the complexity", () =>
-        {
-            expect(e2.multiply(e0)).toStrictEqual(e0);
-        });
-    });
-
-    describe("(when multiplying a Hermitian with itself) should yield a diagram that", () => 
-    {
-        const terminal = new Vertex();
-        const x0 = new Vertex(0, [
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(-a)),
-        ]);
-        const x1 = new Vertex(0, [
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(-a)),
-        ]);
-        const e0 = new Edge(x0, Complex.ONE);
-        const e1 = new Edge(x1, Complex.ONE);
-        const prod = e0.multiply(e1);
-
-        test("has entry weight equal to 1", () =>
-        {
-            expect(prod.weight.equals(Complex.ONE)).toBe(true);
-        });
-
-        test("maintains variable indeces", () =>
-        {
-            expect(prod.pointsTo.variable).toBe(0);
-        });
-
-        test("represents the identity transform", () =>
-        {
-            for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-            {
-                expect(prod.pointsTo.edges[i].pointsTo === terminal).toBe(true);
-                expect(prod.pointsTo.edges[i].weight.equals(weight)).toBe(true);
-            }
-        });
-    });
-
-    describe("(when multiplying two QMDD steps together) should yield a QMDD which", () =>
-    {
-        const terminal = new Vertex();
-        const x20 = new Vertex(2, [
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(a)),
-            new Edge(terminal, Complex(-a)),
-        ]);
-        const x10 = new Vertex(1, [
-            new Edge(x20, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(x20, Complex.ONE),
-        ]);
-        const x00 = new Vertex(0, [
-            new Edge(x10, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(x10, Complex.ONE),
-        ]);
-        const e0 = new Edge(x00, Complex.ONE);
-
-        const x21a = new Vertex(2, [
-            new Edge(terminal, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-        ]);
-        const x21b = new Vertex(2, [
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ONE),
-        ]);
-        const x11 = new Vertex(1, [
-            new Edge(x21a, Complex.ONE),
-            new Edge(x21b, Complex.ONE),
-            new Edge(x21b, Complex.ONE),
-            new Edge(x21a, Complex.ONE),
-        ]);
-        const x01 = new Vertex(0, [
-            new Edge(x11, Complex.ONE),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(terminal, Complex.ZERO),
-            new Edge(x11, Complex.ONE),
-        ]);
-        const e1 = new Edge(x01, Complex.ONE);
-
-        const prod = e0.multiply(e1);
-        const x0 = prod.pointsTo;
-        const x1 = x0.edges[0].pointsTo;
-        const x2a = x1.edges[0].pointsTo;
-        const x2b = x1.edges[1].pointsTo;
-
-        test("has entry weight the product of the old entry weights", () =>
-        {
-            expect(prod.weight.equals(Complex.ONE)).toBe(true);
-        });
-
-        test("maintains variable indeces", () =>
-        {
-            expect(x0.variable).toBe(0);
-            expect(x1.variable).toBe(1);
-            expect(x2a.variable).toBe(2);
-            expect(x2b.variable).toBe(2);
-        });
-
-        describe("preserves the destinations of Edges that are identical in both diagrams:", () =>
-        {
-            test("\nThe non-diagonal edges of InertiaGate should point to the terminal", () =>
-            {
-                expect(x0.edges[1].pointsTo === terminal).toBe(true);
-                expect(x0.edges[2].pointsTo === terminal).toBe(true);    
-            });
-
-            test("\nThe diagonal edges of InertiaGate should point to the same Vertex", () =>
-            {
-                expect(x0.edges[0].pointsTo === x0.edges[3].pointsTo).toBe(true); // this fails
-            });
-        });
-
-        test("preserves the weights of Edges that are identical in both diagrams", () =>
-        {
-            for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-                expect(x0.edges[i].weight.equals(weight)).toBe(true);    
-        });
-
-        describe("merges compatible Verteces correctly:", () =>
-        {
-            test("\nThe diagonal Edges should point to the same Vertex", () =>
-            {
-                expect(x1.edges[0].pointsTo === x1.edges[3].pointsTo).toBe(true); // this fails
-            });
-
-            test("\nThe non-diagonal Edges should point to the same Vertex", () =>
-            {
-                expect(x1.edges[1].pointsTo === x1.edges[2].pointsTo).toBe(true); // this fails
-            });
-
-            test("\nAll Edges should have weight equal to 1", () =>
-            {
-                for(let i = 0; i < 4; i++)
-                    expect(x1.edges[i].weight.equals(Complex.ONE)).toBe(true);    
-            });
-        });
-
-        test("multiplies the Edges of foreign Verteces correctly", () =>
-        {
-            for (const [vertex, weights] of [
-                [x2a, [Complex(a), Complex(a), Complex.ZERO, Complex.ZERO]],
-                [x2b, [Complex.ZERO, Complex.ZERO, Complex(a), Complex(-a)]]
-                ])
-                for (const [i, weight] of (weights as Complex[]).entries())
-                {
-                    expect((vertex as Vertex).edges[i].pointsTo === terminal).toBe(true);
-                    expect((vertex as Vertex).edges[i].weight.equals(weight)).toBe(true);
-                }
-        });
+        expect([sum.dest.id, sum.weight]).toEqual([h.id, Complex.add(1, Complex.I)]);
     });
 });
 
-describe("QMDD", () =>
+describe('QMDD: Multiplication:', () =>
 {
-    describe("should throw for", () =>
+    test('\nProducts are cached', () =>
     {
-        test("invalid constructor input type", () =>
-        {
-            // @ts-expect-error
-            expect(() => { new QMDD('lmaoo'); })
-            .toThrow("Invalid input type in QMDD (expected Gate[][]).");
-        });
-
-        describe("invalid decimal value in .evaluate():", ()=>
-        {
-            test("\nNon-numerical input", () =>
-            {
-                // @ts-expect-error
-                expect(() => { [...new QMDD([]).evaluate('lmaoo')]; })
-                .toThrow("Invalid input type in QMDD.evaluate (expected an integer in [0, 10], got lmaoo).")
-            })
-
-            test("\nNegative value", () =>
-            {
-                expect(() => { [...new QMDD([]).evaluate(-1)]; })
-                .toThrow("Invalid input type in QMDD.evaluate (expected an integer in [0, 10], got -1).")
-            });
-
-            test("\nFloat value", () =>
-            {
-                expect(() => { [...new QMDD([]).evaluate(0.5)]; })
-                .toThrow("Invalid input type in QMDD.evaluate (expected an integer in [0, 10], got 0.5).")
-            });
-
-            test("\nToo big a value", () =>
-            {
-                expect(() => { [...new QMDD([]).evaluate(11)]; })
-                .toThrow("Invalid input type in QMDD.evaluate (expected an integer in [0, 10], got 11).")
-            });
-        });
+        const terminal = new QMDD();
+        const e0 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.B }])};
+        const e1 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 }])};
+        const prod0 = QMDD.mul(e0, e1);
+        const prod1 = QMDD.mul(e0, e1);
+        
+        expect(prod1).toEqual(prod0);
+        expect(prod1.dest.id).toBe(prod0.dest.id);
     });
 
-    describe("(when building an uncontrolled step) should yield a QMDD which", () =>
-    {
-        const step = new QMDD([[
-            new X(),
-            new H(),
-            new I(),
-        ]]);
-
-        const x0 = step.entry.pointsTo;
-        const x1 = x0.edges[1].pointsTo;
-        const x2 = x1.edges[0].pointsTo;
-        const terminal = x2.edges[0].pointsTo;
-
-        test("has entry weight equal to 1", () =>
-        {
-            expect(step.entry.weight.equals(Complex.ONE)).toBe(true);
-        });
-
-        test("has a terminal vertex at the correct depth", () =>
-        {
-            expect(terminal.terminal()).toBe(true);
-        });
-
-        describe("appoints Edge destinations according to each Gate's matrix:", () =>
-        {
-            test("\nThe XGate Vertex should connect to the next Vertex by the non-diagonals", () =>
-            {
-                for (const [i, vertex] of [terminal, x1, x1, terminal].entries())
-                    expect(x0.edges[i].pointsTo === vertex).toBe(true);    
-            });
-
-            test("\nThe HGate Vertex should connect to the next Vertex by all its edges", () =>
-            {
-                for (let i = 0; i < 4; i++)
-                    expect(x1.edges[i].pointsTo === x2).toBe(true);        
-            });
-
-            test("\nThe final Vertex should point to the terminal", () =>
-            {
-                for (let i = 0; i < 4; i++)
-                    expect(x2.edges[i].pointsTo === terminal).toBe(true);
-            });
-        });
-
-        describe("appoints Edge weights according to each Gate's matrix:", () => 
-        {
-            test("\nThe XGate Vertex should have weights [0, 1, 1, 0]", () =>
-            {
-                for (const [i, weight] of [Complex.ZERO, Complex.ONE, Complex.ONE, Complex.ZERO].entries())
-                    expect(x0.edges[i].weight.equals(weight)).toBe(true);                
-            });
-
-            test("\nThe HGate Vertex should have weights [a, a, a, -a]", () =>
-            {
-                for (let i = 0; i < 3; i++)
-                    expect(x1.edges[i].weight.equals(Complex(a))).toBe(true);
-                expect(x1.edges[3].weight.equals(Complex(-a))).toBe(true);        
-            });
-
-            test("\nThe InertiaGate Vertex should have weights [1, 0, 0, 1]", () =>
-            {
-                for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-                    expect(x2.edges[i].weight.equals(weight)).toBe(true);
-            });
-        });
+    test('\n0-edges are the nullifying element', () =>
+    {   
+        const terminal = new QMDD();
+        const e0 = { dest: terminal, weight: 0 };
+        const e1 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 }])};
+        
+        expect(QMDD.mul(e0, e1)).toStrictEqual(e0);
     });
 
-    describe("(when building a CNOT with the control on the top) should yield a QMDD which", () =>
+    test('\n1-edges are the neutral element', () =>
     {
-        const cnot = new QMDD([[new Control(), new X()]]);
+        const terminal = new QMDD();
+        const e0 = { dest: terminal, weight: 1 };
+        const e1 = { 
+            weight: 1,
+            dest: new QMDD(0, [
+                { dest: terminal, weight: 0 },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: Complex.I },
+                { dest: terminal, weight: 0 }])};
+        
+        expect(QMDD.mul(e0, e1)).toStrictEqual(e1);
+    });
+});
 
-        const x0 = cnot.entry.pointsTo;
-        const x1a = x0.edges[0].pointsTo;
-        const x1b = x0.edges[3].pointsTo;
-        const terminal = x1a.edges[0].pointsTo;
-
-        test("has entry weight equal to 1", () =>
-        {
-            expect(cnot.entry.weight.equals(Complex.ONE));
-        });
-
-        test("has a terminal Vertex at the correct depth", () =>
-        {
-            expect(terminal.terminal()).toBe(true);
-        });
-
-        test("doesn't overrecycle Verteces", () =>
-        {
-            expect(x1a === x1b).toBe(false);
-            expect(x1a === x0).toBe(false);
-            expect(x0  === terminal).toBe(false);    
-        });
-
-        describe("points to the active part by the activation edge:", () =>
-        {
-            test("\nThe active part's entry weight should be 1", () =>
-            {
-                expect(x0.edges[3].weight.equals(Complex.ONE)).toBe(true);
-            });
-
-            test("\nThe weights should follow the Gate's matrix", () => 
-            {
-                for (const [i, weight] of [Complex.ZERO, Complex.ONE, Complex.ONE, Complex.ZERO].entries())
-                    expect(x1b.edges[i].weight.equals(weight)).toBe(true);
-            });
-
-            test("\nAll edges should point to the terminal", () =>
-            {
-                for (let i = 0; i < 4; i++)
-                    expect(x1b.edges[i].pointsTo === terminal).toBe(true);
-            });
-        });
-
-        describe("points to the inactive part by the off-activation edge:", () =>
-        {
-            test("\nThe inactive part's entry weight should be 1", () =>
-            {
-                expect(x0.edges[0].weight.equals(Complex.ONE)).toBe(true);
-            });
-
-            test("\nThe weights should follow the identity matrix", () => 
-            {
-                for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-                    expect(x1a.edges[i].weight.equals(weight)).toBe(true);
-            });
-
-            test("\nAll edges should point to the terminal", () =>
-            {
-                for (let i = 0; i < 4; i++)
-                    expect(x1a.edges[i].pointsTo === terminal).toBe(true);
-            });
-        });
-
-        describe("nullifies non-diagonal edges:", () =>
-        {
-            test("\nThey should point to the terminal", () =>
-            {
-                expect(x0.edges[1].pointsTo === terminal).toBe(true);
-                expect(x0.edges[2].pointsTo === terminal).toBe(true);
-            });
-
-            test("\nThey should have zero weight", () =>
-            {
-                expect(x0.edges[1].weight.equals(Complex.ZERO)).toBe(true);
-                expect(x0.edges[2].weight.equals(Complex.ZERO)).toBe(true);
-            });
-        });
+describe('QMDD: Multiplication: \nMultiplying by an identity branch yields the same edge, scaled:', () =>
+{
+    const terminal = new QMDD();
+    const h = new QMDD(1, [
+        { dest: terminal, weight: Complex.A },
+        { dest: terminal, weight: Complex.A },
+        { dest: terminal, weight: Complex.A },
+        { dest: terminal, weight: Complex.NEG_A }]);
+    const hh = new QMDD(0, [
+        { dest: h, weight: Complex.A },
+        { dest: h, weight: Complex.A },
+        { dest: h, weight: Complex.A },
+        { dest: h, weight: Complex.NEG_A }]);
+    const i = new QMDD(1, [
+        { dest: terminal, weight: Complex.I },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: 0 },
+        { dest: terminal, weight: Complex.I }]);
+    const ii = new QMDD(0, [
+        { dest: i, weight: Complex.B },
+        { dest: terminal, weight: 0  },
+        { dest: terminal, weight: 0  },
+        { dest: i, weight: Complex.B }]);
+    const prod = QMDD.mul(
+        { dest: hh, weight: 1 },
+        { dest: ii, weight: 1 });
+    
+    test('\nThe entry edge gets scaled according to the trivial scalars', () =>
+    {
+        expect(prod.weight).toBe(Complex.mul(Complex.I, Complex.B));
     });
 
-    describe("(when building a CNOT with the control on the bottom) should yield a QMDD which", () =>
+    test('\nAll top edges point to the same vertex', () =>
     {
-        const cnot = new QMDD([[new X(), new Control(true)]]);
-
-        const x0 = cnot.entry.pointsTo;
-        const x1a = x0.edges[1].pointsTo;
-        const x1b = x0.edges[0].pointsTo;
-        const terminal = x1a.edges[0].pointsTo;
-
-        test("has entry weight equal to 1", () =>
-        {
-            expect(cnot.entry.weight.equals(Complex.ONE));
-        });
-
-        test("has a terminal Vertex at the correct depth", () =>
-        {
-            expect(terminal.terminal()).toBe(true);
-        });
-
-        test("doesn't overrecycle Verteces", () =>
-        {
-            expect(x1a === x1b).toBe(false);
-            expect(x1a === x0).toBe(false);
-            expect(x0  === terminal).toBe(false);    
-        });
-
-        describe("points to the inactive part", () =>
-        {
-            test("with the diagonal edges", () =>
-            {
-                for (const i of [0, 3])
-                {
-                    expect(x0.edges[i].pointsTo === x1b).toBe(true);
-                    expect(x0.edges[i].weight.equals(Complex.ONE)).toBe(true);
-                }
-            });
-
-            test("which has flipped controlled weights", () =>
-            {
-                for (const [i, weight] of [Complex.ZERO, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-                    expect(x1b.edges[i].weight.equals(weight)).toBe(true);
-            });
-
-            test("which points to the terminal", () =>
-            {
-                for (let i = 0; i < 4; i++)
-                    expect(x1b.edges[i].pointsTo === terminal).toBe(true);
-            });
-        });
-
-        describe("points to the active part", () =>
-        {
-            test("with the off-diagonal edges", () =>
-            {
-                for (const i of [1, 2])
-                {
-                    expect(x0.edges[i].pointsTo === x1a).toBe(true);
-                    expect(x0.edges[i].weight.equals(Complex.ONE)).toBe(true);
-                }
-            });
-
-            test("which has expected controlled weights", () =>
-            {
-                for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ZERO].entries())
-                    expect(x1a.edges[i].weight.equals(weight)).toBe(true);
-            });
-
-            test("which points to the terminal", () =>
-            {
-                for (let i = 0; i < 4; i++)
-                    expect(x1a.edges[i].pointsTo === terminal).toBe(true);
-            });
-        });
+        expect(prod.dest.edges.map(e => e.dest.id)).toEqual([h.id, h.id, h.id, h.id]);
     });
 
-    describe("(when building a mix-controlled Toffoli with the target in the middle) should yield a QMDD which", () => 
+    test('\nTop edge weights follow the Hadamard transform', () =>
     {
-        const toffoli = new QMDD([[new Control(), new X(), new Control(true)]]);
+        expect(prod.dest.edges.map(e => e.weight)).toEqual([1, 1, 1, Complex.NEG_ONE]);
+    });
+});
 
-        const x0 = toffoli.entry.pointsTo;
-        const x1a = x0.edges[0].pointsTo;
-        const x1b = x0.edges[3].pointsTo;
-        const x2a = x1a.edges[0].pointsTo;
-        const x2b = x1b.edges[1].pointsTo;
-        const x2c = x1b.edges[0].pointsTo;
-        const terminal = x2a.edges[0].pointsTo;
+describe('QMDD: Multiplication: \nMultiplying a matrix with itself yields the identity QMDD:', () =>
+{
+    const terminal = new QMDD();
+    const h = new QMDD(0, [
+        { dest: terminal, weight: Complex.A },
+        { dest: terminal, weight: Complex.A },
+        { dest: terminal, weight: Complex.A },
+        { dest: terminal, weight: Complex.NEG_A }]);
+    const prod = QMDD.mul({ dest: h, weight: 1 }, { dest: h, weight: 1 });
+    
+    test('\nAll edges point to the terminal', () =>
+    {
+        expect(prod.dest.edges.every(e => e.dest.isTerminal())).toBe(true);
+    });
 
-        test("has a terminal Vertex in the correct depth", () =>
-        {
-            expect(terminal.terminal()).toBe(true);
-        });
+    test('\nThe edge weights follow the identity matrix', () =>
+    {
+        expect(prod.dest.edges.map(e => e.weight)).toEqual([1, 0, 0, 1]);
+    });
 
-        test("doesn't overrecycle Verteces", () =>
-        {
-            expect(x1a === x1b).toBe(false);
-            expect(x2a === x2b || x2a === x2c || x2b === x2c).toBe(false);
-        });
+    test('\nThe final scalar is 1', () => 
+    {
+        expect(prod.dest.scalar).toEqual(Complex.ONE);
+    });
 
-        test("nullifies the non-diagonal edges", () =>
-        {
-            for (const i of [1, 2])
-            {
-                expect(x0.edges[i].pointsTo === terminal).toBe(true);
-                expect(x0.edges[i].weight.equals(Complex.ZERO)).toBe(true);    
-            }
-        });
+    test('\nThe entry weight is 1', () =>
+    {
+        expect(prod.weight).toEqual(Complex.ONE);
+    });
 
-        describe("points to the identity branch for the off-activation edge on the first control:", () =>
-        {
-            test("\nThe identity branch's entry weight should be 1", () =>
-            {
-                expect(x0.edges[0].weight.equals(Complex.ONE)).toBe(true);
-            });
+    test('\nThe vertex auto-labels as an identity', () =>
+    {
+        expect(prod.dest.isIdentity).toBe(true);
+    });
+});
 
-            describe("\nThe branch should sink to the terminal through identity Verteces:", () =>
-            {
-                for (const [v, next] of [[x1a, x2a], [x2a, terminal]])
-                {
-                    test("\nEach participant of the identity branch should point to the next participant or the terminal", () =>
-                    {
-                        expect(v.edges[0].pointsTo === next).toBe(true);
-                        expect(v.edges[1].pointsTo === terminal).toBe(true);
-                        expect(v.edges[2].pointsTo === terminal).toBe(true);
-                        expect(v.edges[3].pointsTo === next).toBe(true);
-                    });
+describe('QMDD: Construction: \nNon-controlled step:', () =>
+{
+    const step = [[new H(), new X(), new I()]];
+    const e = QMDD.build(step, step.at(0)!.length);
 
-                    test("\nEach participant of the identity branch should have identity weights", () =>
-                    {
-                        for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-                            expect(v.edges[i].weight.equals(weight)).toBe(true);
-                    });
-                }
-            });
-        });
+    test('\nAll top edges point to the same destination', () =>
+    {
+        expect(e.dest.edges.every(e => e.dest.id === e.dest.edges[0].dest.id));
+    });
 
-        describe("points to the active QMDD for the activation edge on the first control:", () =>
-        {
-            test("\nThe main branch's entry weight should be 1", () =>
-            {
-                expect(x0.edges[3].weight.equals(Complex.ONE)).toBe(true);
-            });
+    test('\nAll top edge weights follow the Hadamard transform', () =>
+    {
+        expect(e.dest.edges.map(e => e.weight)).toEqual([1, 1, 1, Complex.NEG_ONE]);
+    });
 
-            test("\nThe non-diagonal edges of the main branch should point to the active part", () =>
-            {
-                for (const i of [1, 2])
-                {
-                    expect(x1b.edges[i].pointsTo === x2b).toBe(true);
-                    expect(x1b.edges[i].weight.equals(Complex.ONE)).toBe(true);
-                }
+    test('\nThe top scalar is SQRT(1/2)', () =>
+    {
+        expect(e.dest.scalar).toBe(Complex.A);
+    });
 
-                for (const [i, weight] of [Complex.ONE, Complex.ZERO, Complex.ZERO, Complex.ZERO].entries())
-                {
-                    expect(x2b.edges[i].pointsTo === terminal).toBe(true);
-                    expect(x2b.edges[i].weight.equals(weight)).toBe(true);
-                }
-            });
+    const v = e.dest.edges[0].dest;
 
-            test("\nThe diagonal edges of the main branch should point to the inactive part", () =>
-            {
-                for (const i of [0, 3])
-                {
-                    expect(x1b.edges[i].pointsTo === x2c).toBe(true);
-                    expect(x1b.edges[i].weight.equals(Complex.ONE)).toBe(true);
-                }
+    test('\nThe diagonal edges of the middle vertex point to the terminal', () =>
+    {
+        expect([v.edges[0].dest.isTerminal(), v.edges[3].dest.isTerminal()]).toEqual([true, true]);
+    });
 
-                for (const [i, weight] of [Complex.ZERO, Complex.ZERO, Complex.ZERO, Complex.ONE].entries())
-                {
-                    expect(x2c.edges[i].pointsTo === terminal).toBe(true);
-                    expect(x2c.edges[i].weight.equals(weight)).toBe(true);
-                }
-            });
-        });
-    }); 
+    test('\nThe antidiagonal edges of the middle vertex point to a common destination', () =>
+    {
+        expect(v.edges[1].dest.id === v.edges[2].dest.id);
+    });
+
+    test('\nThe edge weights of the middle vertex follow the X matrix', () =>
+    {
+        expect(v.edges.map(e => e.weight)).toEqual([0, 1, 1, 0]);
+    });
+
+    const v1 = v.edges[1].dest;
+
+    test('\nAll bottom layer edges point to the terminal', () =>
+    {
+        expect(v1.edges.every(e => e.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe bottom layer edge weights follow the identity matrix', () =>
+    {
+        expect(v1.edges.map(e => e.weight)).toEqual([1, 0, 0, 1]);        
+    });
+});
+
+describe('QMDD: Construction: \nControlled from the top step:', () =>
+{
+    const step = [[new Control(), new X()]];
+    const e = QMDD.build(step, step.at(0)!.length);
+
+    test('\nThe top diagonal edges point to different verteces', () =>
+    {
+        expect(e.dest.edges[0].dest.id !== e.dest.edges[3].dest.id);
+    });
+
+    test('\nThe top anti-diagonal edges point to the terminal', () =>
+    {
+        expect([e.dest.edges[1].dest.isTerminal(), e.dest.edges[2].dest.isTerminal()]).toEqual([true, true]);        
+    });
+
+    test('\nThe top edge weights follow the identity matrix', () =>
+    {
+        expect(e.dest.edges.map(el => el.weight)).toEqual([1, 0, 0, 1]);
+    });
+
+    const v0 = e.dest.edges[0].dest;
+    const v1 = e.dest.edges[3].dest;
+
+    test('\nThe left sub-branch auto-labels as an identity', () =>
+    {
+        expect(v0.isIdentity).toBe(true);
+    });
+
+    test('\nThe left sub-branch edges all point to the terminal', () =>
+    {
+        expect(v0.edges.every(el => el.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe left sub-branch edge weights follow the identity matrix', () =>
+    {
+        expect(v0.edges.map(el => el.weight)).toEqual([1, 0, 0, 1]);
+    });
+
+    test('\nThe right sub-branch edges all point to the terminal', () =>
+    {
+        expect(v1.edges.every(el => el.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe right sub-branch edge weights follow the X matrix', () =>
+    {
+        expect(v1.edges.map(el => el.weight)).toEqual([0, 1, 1, 0]);
+    });
+
+    test('\nBoth branches share the same variable', () =>
+    {
+        expect(v1.variable).toBe(v0.variable);
+    });
+});
+
+describe('QMDD: Construction: \nControlled from the bottom step:', () =>
+{
+    const step = [[new X(), new Control()]];
+    const e = QMDD.build(step, step.at(0)!.length);
+
+    test('\nThe top diagonal edges point to the same destination', () =>
+    {
+        expect(e.dest.edges[0].dest.id === e.dest.edges[3].dest.id).toBe(true);
+    });
+
+    test('\nThe top anti-diagonal edges point to the same destination', () =>
+    {
+        expect(e.dest.edges[1].dest.id === e.dest.edges[2].dest.id).toBe(true);        
+    });
+
+    test('\nThe top diagonal and anti-diagonal edges point to different destinations', () =>
+    {
+        expect(e.dest.edges[0].dest.id === e.dest.edges[1].dest.id).toBe(false);
+    });
+
+    test('\nThe top edge weights are all 1', () =>
+    {
+        expect(e.dest.edges.map(e => e.weight)).toEqual([1, 1, 1, 1]);
+    });
+
+    const v0 = e.dest.edges[0].dest;
+    const v1 = e.dest.edges[1].dest;
+
+    test('\nThe left sub-branch edges all point to the terminal', () =>
+    {
+        expect(v0.edges.every(e => e.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe left sub-branch edge weights are of a 0-control', () =>
+    {
+        expect(v0.edges.map(e => e.weight)).toEqual([1, 0, 0, 0]);
+    });
+
+    test('\nThe right sub-branch edges all point to the terminal', () =>
+    {
+        expect(v1.edges.every(e => e.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe right sub-branch edge weights are of an 1-control', () =>
+    {
+        expect(v1.edges.map(e => e.weight)).toEqual([0, 0, 0, 1]);
+    });
+
+    test('\nThe two sub-branches share the same variable', () =>
+    {
+        expect(v0.variable).toBe(v1.variable);
+    });
+});
+
+describe('QMDD: Construction: \nControlled from both sides step:', () =>
+{
+    const step = [[new Control(), new X(), new Control()]];
+    const e = QMDD.build(step, step.at(0)!.length);
+
+    test('\nThe top anti-diagonal edges point to the terminal', () =>
+    {
+        expect([e.dest.edges[1].dest.isTerminal(), e.dest.edges[2].dest.isTerminal()]).toEqual([true, true]);
+    });
+
+    const v0 = e.dest.edges[0].dest;
+
+    test('\nThe left sub-branch is the identity', () =>
+    {
+        expect(v0.isIdentity).toBe(true);
+    });
+
+    test('\nThe left sub-branch consists of two verteces and the terminal', () =>
+    {
+        expect([v0.edges[0].dest.isTerminal(), v0.edges[0].dest.edges[0].dest.isTerminal()]).toEqual([false, true]);
+    });
+
+    const v1 = e.dest.edges[3].dest;
+
+    test('\nThe right sub-branch root diagonal edges point to the same destination', () =>
+    {
+        expect(v1.edges[0].dest.id).toBe(v1.edges[3].dest.id);
+    });
+
+    test('\nThe right sub-branch root diagonal edges point to the same destination', () =>
+    {
+        expect(v1.edges[1].dest.id).toBe(v1.edges[2].dest.id);
+    });
+
+    test('\nThe right sub-branch root diagonal and anti-diagonal edges point to different destinations', () =>
+    {
+        expect(v1.edges[0].dest.id).not.toBe(v1.edges[1].dest.id);
+    });
+
+    test('\nAll right sub-branch root edge weights are 1', () =>
+    {
+        expect(v1.edges.map(e => e.weight)).toEqual([1, 1, 1, 1]);
+    });
+
+    const v10 = v1.edges[0].dest;
+    const v11 = v1.edges[1].dest;
+
+    test('\nThe right sub-branch diagonal destination edges all point to the terminal', () =>
+    {
+        expect(v10.edges.every(e => e.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe right sub-branch diagonal destination edge weights are of a 0-control', () =>
+    {
+        expect(v10.edges.map(e => e.weight)).toEqual([1, 0, 0, 0]);
+    });
+
+    test('\nThe right sub-branch anti-diagonal destination edges all point to the terminal', () =>
+    {
+        expect(v11.edges.every(e => e.dest.isTerminal())).toBe(true);
+    });
+
+    test('\nThe right sub-branch anti-diagonal destination edge weights are of an 1-control', () =>
+    {
+        expect(v11.edges.map(e => e.weight)).toEqual([0, 0, 0, 1]);
+    });    
 });

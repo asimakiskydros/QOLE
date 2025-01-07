@@ -56,9 +56,9 @@ Output is given in the form of a statevector object:
 
 QMDD parsing nature allows for the statevector to be returned in parts (*lazily*), which in general frees the user and the machine from the exponentially heavy memory cost found in most reversible circuits.
 
-## Installation
+## Installation (NOTE: Not yet operational)
 
-You can install QOLE as a standalone package through NPM: (*Note: not yet available*)
+You can install QOLE as a standalone package through NPM:
 
 ```
 npm install qole
@@ -66,7 +66,7 @@ npm install qole
 From here, you can access the `QuantumCircuit` class directly and get to work
 
 ```JavaScript
-    import { QuantumCircuit } from 'qole`;
+    import { QuantumCircuit } from 'qole';
 ```
 
 or you can peer into the implementation details through the modules `'qole.gates'`, `'qole.qmdd'` and `'qole.complex'`.
@@ -75,6 +75,10 @@ Alternatively, you can install the entire project locally to experiment with the
 
 ```
     npm install asimakiskydros/QOLE
+```
+
+after pooling the project, remember to invoke the following to generate the required dependencies:
+```
     npm install
 ```
 

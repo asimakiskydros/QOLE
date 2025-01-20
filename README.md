@@ -114,9 +114,14 @@ This project (kind of) acts as a mini-review of the topic, merging together impl
 
 while also consulting the rest of the bibliography for further optimization techniques. A full documentation explaining the entire QMDD implementation is in the works.
 
-# Contributing
+## Contributing
 
 Please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Citation
+
+If you use this project in your research, kindly consider citing it as:
+> Asimakis Kydros. (2025). QOLE: A QMDD-based Quantum Circuit Simulator (Version 1.1.0) \[Computer software\]. https://github.com/asimakiskydros/QOLE
 
 ## Licence
 

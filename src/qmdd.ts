@@ -193,16 +193,19 @@ export class QMDD
         if (e0.dest.id === e1.dest.id) // if the pointed-to verteces are the same
             return { dest: e0.dest, weight: Complex.add(e0.weight, e1.weight) };
 
+        if (e0.dest.variable < e1.dest.variable) // if e0 precedes e1
+            [e0, e1] = [e1, e0];
+
         const edges: Edge[] = [];
 
         for (let i = 0; i < 4; i++)
         {
             const e0i = e0.dest.edges[i];
             const e1i = e1.dest.edges[i];
-
             const p: Edge = { dest: e0i.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0i.weight) };
-            const q: Edge = { dest: e1i.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i.weight) };
-
+            const q: Edge = e0.dest.variable === e1.dest.variable ?
+                { dest: e1i.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i.weight) }: e1;
+            
             edges.push(QMDD.add(p, q));
         }
         
@@ -242,27 +245,31 @@ export class QMDD
         if (e0.dest.isTerminal())
             return { dest: e1.dest, weight: Complex.mul(e0.weight, e1.weight) };
 
+        if (e0.dest.variable < e1.dest.variable) // if e0 precedes e1
+            [e0, e1] = [e1, e0];
+
         for (const [id, other] of [[e0, e1], [e1, e0]]) if (id.dest.isIdentity)
             return {
                 dest: other.dest,
                 weight: Complex.mul(id.weight, id.dest.scalar, other.weight)
             };
 
-        const j = [[0, 2], [1, 3], [0, 2], [1, 3]];
-        const k = [[0, 1], [0, 1], [2, 3], [2, 3]];
         const edges: Edge[] = [];
 
-        for (let i = 0; i < 4; i++)
+        for (const i of [0, 2]) for (const j of [0, 1])
         {
-            const e0i0 = e0.dest.edges[j[i][0]];
-            const e1i0 = e1.dest.edges[k[i][0]];
-            const e0i1 = e0.dest.edges[j[i][1]];
-            const e1i1 = e1.dest.edges[k[i][1]];
-
-            const p0: Edge = { dest: e0i0.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0i0.weight) };
-            const q0: Edge = { dest: e1i0.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i0.weight) };
-            const p1: Edge = { dest: e0i1.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0i1.weight) };
-            const q1: Edge = { dest: e1i1.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i1.weight) };
+            // done like this so the initial zero edge isnt needed and thus the terminal doesnt need to be inserted as an input
+            const e0_i0 = e0.dest.edges[i];
+            const e1_j0 = e1.dest.edges[j];
+            const p0: Edge = { dest: e0_i0.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0_i0.weight) };
+            const q0: Edge = e0.dest.variable === e1.dest.variable ?
+                {dest: e1_j0.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1_j0.weight) }: e1;
+            
+            const e0_i1 = e0.dest.edges[i + 1];
+            const e1_j2 = e1.dest.edges[j + 2];
+            const p1: Edge = { dest: e0_i1.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0_i1.weight) };
+            const q1: Edge = e0.dest.variable === e1.dest.variable ?
+                {dest: e1_j2.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1_j2.weight) }: e1;
 
             edges.push(QMDD.add(QMDD.mul(p0, q0), QMDD.mul(p1, q1)));
         }
@@ -303,8 +310,8 @@ export class QMDD
             {
                 const [dest, weight] = trivial === root ? [terminal, 0] : [root, 1]; 
                 
-                edges[gate.antiActiveDiagonal()] = { dest: trivial, weight: 1 };
-                edges[gate.activeDiagonal()] = { dest: dest, weight: weight };
+                edges[gate.antiactivator()] = { dest: trivial, weight: 1 };
+                edges[gate.activator()] = { dest: dest, weight: weight };
             }
 
             const prev = root;
@@ -371,23 +378,7 @@ export class QMDD
         for (const vars of skipped(entry.dest.variable))
             stack.push({ vertex: entry.dest, state: vars, weight: entry.weight });
 
-        // extremely rare case where the original matrix consists of only a single value
-        // so the resulting QMDD is a terminal edge with that value as weight.
-        // NOTE: due to how input is being given through circuit.ts, this will never actually occur;
-        // this piece of code is included for completeness
-        /* c8 ignore start */
-        if (entry.dest.isTerminal())
-        {
-            const weight = Complex.get(entry.weight)!;
-
-            if (entry.dest.variable > 0)
-                // all variables are skipped here. Only thing to do is to
-                // manually generate all binary strings and yield them with the same value 
-                for (const vars of skipped(entry.dest.variable))
-                    yield { state: vars, real: weight.re(), imag: weight.im() };
-        }
-        /* c8 ignore end */
-        else while (stack.length > 0)
+        while (stack.length > 0)
         {
             const { vertex, state, weight } = stack.pop()!;
 
@@ -403,9 +394,9 @@ export class QMDD
                 continue;
             }
             
-            // traverse all child verteces corresponding to the 0-path (edges 0, 2), nullify other edges
+            // traverse all child verteces corresponding to the 0-path (edges 0, 1), nullify other edges
             // add new entries to the stack in reverse so traversal is done preorder-ly.
-            for (const i of [2, 0])
+            for (const i of [1, 0])
             {
                 const edge = vertex.edges[i];
 

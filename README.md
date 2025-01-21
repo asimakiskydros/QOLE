@@ -71,35 +71,6 @@ From here, you can access the `QuantumCircuit` class directly and get to work
 
 or you can peer into the implementation details through the modules `'qole.gates'`, `'qole.qmdd'` and `'qole.complex'`.
 
-Alternatively, you can install the entire project locally to experiment with the code:
-
-```
-    npm install asimakiskydros/QOLE
-```
-
-after pooling the project, remember to invoke the following to generate the required dependencies:
-```
-    npm install
-```
-
-## Testing
-
-QOLE uses Jest for testing. You can invoke testing in three ways:
-
-1. Normal (terminal-based):
-```
-    npm test 
-```
-2. Log-based (uses `jest-reporter.js` for a more verbose output):
-```
-    npm run test:custom
-```
-
-3. Debug mode:
-``` 
-    npm run test:debug
-```
-
 ## QMDD Backend
 
 The actual simulation is done through these Decision Diagrams. For an initial introduction to QMDDs, please refer to [Miller and Thornton, 2006, ISMVL](https://doi.org/10.1109/ISMVL.2006.35).

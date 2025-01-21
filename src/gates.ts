@@ -90,7 +90,7 @@ export class Control extends Gate
     /**
      * Returns the index of the diagonal matrix element that hosts the activation value.
      */
-    public activeDiagonal (): number
+    public activator (): number
     { 
         return this === Control.zeroSingleton ? 0 : 3; 
     }
@@ -98,7 +98,7 @@ export class Control extends Gate
     /**
      * Returns the index of the diagonal matrix element that doesn't host the activation value.
      */
-    public antiActiveDiagonal (): number
+    public antiactivator (): number
     {
         return this === Control.zeroSingleton ? 3 : 0;
     }
@@ -219,7 +219,7 @@ export class Y extends Gate
         Y.singleton = this;
     }
 
-    public override matrix (): number[] { return [0, Complex.NEG_I, Complex.I, 0]; }
+    public override matrix (): number[] { return [0, Complex.I, Complex.NEG_I, 0]; }
 }
 
 /**

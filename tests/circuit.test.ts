@@ -1,7 +1,5 @@
 import { QuantumCircuit } from '../src/circuit';
-import { Complex } from '../src/complex';
 import { CCX, Control, CX, H, I, S, X, Y,  } from '../src/gates';
-import { QMDD } from '../src/qmdd';
 
 /**
  * Square root of a half rounded to 4 decimals.
@@ -339,7 +337,7 @@ describe("QuantumCircuit:", () =>
             [{ state: '0', real:  1, imag: 0 }],
             [{ state: '1', real: -1, imag: 0 }]]
         .entries())
-            test(`.\nz() for the initial state ${i}`, () =>
+            test(`\n.z() for the initial state ${i}`, () =>
             {
                 const qc = 
                     new QuantumCircuit(1)

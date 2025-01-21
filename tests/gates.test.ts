@@ -48,21 +48,21 @@ describe("Control: ", () =>
     {
         const ctrl = new Control(true);
 
-        expect(ctrl.activeDiagonal()).toBe(0);
+        expect(ctrl.activator()).toBe(0);
     });
 
     test("|1> case activates on index 3", () =>
     {
         const ctrl = new Control();
 
-        expect(ctrl.activeDiagonal()).toBe(3);
+        expect(ctrl.activator()).toBe(3);
     });
 });
 
 for (const { gate, matrix } of [
     { gate: I, matrix: [1, 0, 0, 1] },
     { gate: X, matrix: [0, 1, 1, 0] },
-    { gate: Y, matrix: [0, Complex.NEG_I, Complex.I, 0] },
+    { gate: Y, matrix: [0, Complex.I, Complex.NEG_I, 0] },
     { gate: Z, matrix: [1, 0, 0, Complex.NEG_ONE] },
     { gate: H, matrix: [Complex.A, Complex.A, Complex.A, Complex.NEG_A] },
     { gate: S, matrix: [1, 0, 0, Complex.I] },
@@ -117,8 +117,8 @@ for (const { gate, target } of [
             const ctrl0 = obj0.unwrap().at(0)?.at(0) as Control;
 
             expect(
-                ctrl1.activeDiagonal() === 3 && 
-                ctrl0.activeDiagonal() === 0)
+                ctrl1.activator() === 3 && 
+                ctrl0.activator() === 0)
             .toBe(true);
         });
 
@@ -152,7 +152,7 @@ for (const { gate, target } of [
             const ctrl1 = objUnwrapped.at(0)?.at(0) as Control;
             const ctrl2 = objUnwrapped.at(0)?.at(1) as Control;
 
-            expect([ctrl1.activeDiagonal(), ctrl2.activeDiagonal()]).toEqual([3, 0]);
+            expect([ctrl1.activator(), ctrl2.activator()]).toEqual([3, 0]);
         });
 
         test(` equals a ${target.name} controlled twice`, () =>

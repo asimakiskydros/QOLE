@@ -1,7 +1,7 @@
 import { Complex } from '../src/complex';
 import { 
-    CCX, CCZ, CH, Control, CS, CX, CY, CZ,
-    H, I, MCX, S, T, X, Y, Z } from '../src/gates';
+    CCX, CCZ, CH, Control, CS, CSdag, CX, CY, CZ,
+    H, I, MCX, S, Sdag, T, Tdag, X, Y, Z } from '../src/gates';
 
 
 describe("Control: ", () =>
@@ -66,7 +66,9 @@ for (const { gate, matrix } of [
     { gate: Z, matrix: [1, 0, 0, Complex.NEG_ONE] },
     { gate: H, matrix: [Complex.A, Complex.A, Complex.A, Complex.NEG_A] },
     { gate: S, matrix: [1, 0, 0, Complex.I] },
-    { gate: T, matrix: [1, 0, 0, Complex.B] }
+    { gate: T, matrix: [1, 0, 0, Complex.B] },
+    { gate: Sdag, matrix: [1, 0, 0, Complex.NEG_I] },
+    { gate: Tdag, matrix: [1, 0, 0, Complex.C] }
 ])
     describe(gate.name, () => 
     {
@@ -99,6 +101,7 @@ for (const { gate, target } of [
     { gate: CZ, target: Z },
     { gate: CH, target: H },
     { gate: CS, target: S },
+    { gate: CSdag, target: Sdag }
 ])
     describe(gate.name, () => 
     {

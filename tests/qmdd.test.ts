@@ -71,7 +71,7 @@ describe('QMDD: ', () =>
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: 0 }])};
-        const sum = QMDD.add(e0, e1);
+        const sum = QMDD.add(e0, e1, terminal);
 
         expect(sum.dest.isTerminal()).toBe(true);
         expect(sum.weight).toBe(Complex.I);
@@ -102,7 +102,7 @@ describe('QMDD: ', () =>
             { dest: x,        weight: 1 }]);
 
         const e = QMDD.mul(
-            QMDD.mul({ dest: hi, weight: 1 }, { dest: cx, weight: 1}), { dest: hi, weight: 1 });
+            QMDD.mul({ dest: hi, weight: 1 }, { dest: cx, weight: 1}, terminal), { dest: hi, weight: 1 }, terminal);
 
         expect(e.dest.edges.map(v => v.dest.isTerminal())).toEqual([true, false, false, true]);
     });
@@ -190,8 +190,8 @@ describe('QMDD: Addition: ', () =>
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: 0 }])};
-        const sum0 = QMDD.add(e0, e1);
-        const sum1 = QMDD.add(e0, e1);
+        const sum0 = QMDD.add(e0, e1, terminal);
+        const sum1 = QMDD.add(e0, e1, terminal);
         
         expect(sum1).toEqual(sum0);
         expect(sum1.dest.id).toBe(sum0.dest.id);
@@ -209,7 +209,7 @@ describe('QMDD: Addition: ', () =>
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: 0 }])};
             
-        expect(QMDD.add(e0, e1)).toStrictEqual(e1);
+        expect(QMDD.add(e0, e1, terminal)).toStrictEqual(e1);
     });
 
     test('\nCommutativity is respected', () =>
@@ -229,8 +229,8 @@ describe('QMDD: Addition: ', () =>
                 { dest: terminal, weight: 1 },
                 { dest: terminal, weight: 1 },
                 { dest: terminal, weight: 0 }])};
-        const sum1 = QMDD.add(h, x);
-        const sum2 = QMDD.add(x, h);
+        const sum1 = QMDD.add(h, x, terminal);
+        const sum2 = QMDD.add(x, h, terminal);
 
         expect({ id: sum1.dest.id, weight: sum1.weight })
         .toEqual({ id: sum2.dest.id, weight: sum2.weight });
@@ -244,7 +244,7 @@ describe('QMDD: Addition: ', () =>
             { dest: terminal, weight: Complex.A },
             { dest: terminal, weight: Complex.A },
             { dest: terminal, weight: Complex.NEG_A }]);
-        const sum = QMDD.add({ dest: h, weight: 1 }, { dest: h, weight: Complex.I });
+        const sum = QMDD.add({ dest: h, weight: 1 }, { dest: h, weight: Complex.I }, terminal);
 
         expect([sum.dest.id, sum.weight]).toEqual([h.id, Complex.add(1, Complex.I)]);
     });
@@ -269,8 +269,8 @@ describe('QMDD: Multiplication:', () =>
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: 0 }])};
-        const prod0 = QMDD.mul(e0, e1);
-        const prod1 = QMDD.mul(e0, e1);
+        const prod0 = QMDD.mul(e0, e1, terminal);
+        const prod1 = QMDD.mul(e0, e1, terminal);
         
         expect(prod1).toEqual(prod0);
         expect(prod1.dest.id).toBe(prod0.dest.id);
@@ -288,7 +288,7 @@ describe('QMDD: Multiplication:', () =>
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: 0 }])};
         
-        expect(QMDD.mul(e0, e1)).toStrictEqual(e0);
+        expect(QMDD.mul(e0, e1, terminal)).toStrictEqual(e0);
     });
 
     test('\n1-edges are the neutral element', () =>
@@ -303,7 +303,7 @@ describe('QMDD: Multiplication:', () =>
                 { dest: terminal, weight: Complex.I },
                 { dest: terminal, weight: 0 }])};
         
-        expect(QMDD.mul(e0, e1)).toStrictEqual(e1);
+        expect(QMDD.mul(e0, e1, terminal)).toStrictEqual(e1);
     });
 });
 
@@ -332,7 +332,7 @@ describe('QMDD: Multiplication: \nMultiplying by an identity branch yields the s
         { dest: i, weight: Complex.B }]);
     const prod = QMDD.mul(
         { dest: hh, weight: 1 },
-        { dest: ii, weight: 1 });
+        { dest: ii, weight: 1 }, terminal);
     
     test('\nThe entry edge gets scaled according to the trivial scalars', () =>
     {
@@ -350,7 +350,7 @@ describe('QMDD: Multiplication: \nMultiplying by an identity branch yields the s
     });
 });
 
-describe('QMDD: Multiplication: \nMultiplying a matrix with itself yields the identity QMDD:', () =>
+describe('QMDD: Multiplication: \nMultiplying a Hermitian with itself yields the identity QMDD:', () =>
 {
     const terminal = new QMDD();
     const h = new QMDD(0, [
@@ -358,7 +358,7 @@ describe('QMDD: Multiplication: \nMultiplying a matrix with itself yields the id
         { dest: terminal, weight: Complex.A },
         { dest: terminal, weight: Complex.A },
         { dest: terminal, weight: Complex.NEG_A }]);
-    const prod = QMDD.mul({ dest: h, weight: 1 }, { dest: h, weight: 1 });
+    const prod = QMDD.mul({ dest: h, weight: 1 }, { dest: h, weight: 1 }, terminal);
     
     test('\nAll edges point to the terminal', () =>
     {
@@ -385,6 +385,48 @@ describe('QMDD: Multiplication: \nMultiplying a matrix with itself yields the id
         expect(prod.dest.isIdentity).toBe(true);
     });
 });
+
+describe('QMDD: Multiplication: \nMultiplying a non-Hermitian with its dagger yields the identity QMDD:', () =>
+    {
+        const terminal = new QMDD();
+        const t = new QMDD(0, [
+            { dest: terminal, weight: 1 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: Complex.B }]);
+        const tdag = new QMDD(0, [
+            { dest: terminal, weight: 1 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: Complex.C }]);
+    
+        const prod = QMDD.mul({ dest: t, weight: 1 }, { dest: tdag, weight: 1 }, terminal);
+        
+        test('\nAll edges point to the terminal', () =>
+        {
+            expect(prod.dest.edges.every(e => e.dest.isTerminal())).toBe(true);
+        });
+    
+        test('\nThe edge weights follow the identity matrix', () =>
+        {
+            expect(prod.dest.edges.map(e => e.weight)).toEqual([1, 0, 0, 1]);
+        });
+    
+        test('\nThe final scalar is 1', () => 
+        {
+            expect(prod.dest.scalar).toEqual(Complex.ONE);
+        });
+    
+        test('\nThe entry weight is 1', () =>
+        {
+            expect(prod.weight).toEqual(Complex.ONE);
+        });
+    
+        test('\nThe vertex auto-labels as an identity', () =>
+        {
+            expect(prod.dest.isIdentity).toBe(true);
+        });
+    });
 
 describe('QMDD: Construction: \nNon-controlled step:', () =>
 {

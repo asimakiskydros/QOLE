@@ -175,7 +175,7 @@ export class QMDD
      * @param e1 An `Edge` pointing to the second `QMDD`.
      * @returns A new `Edge` pointing to the sum `QMDD`.
      */
-    public static add (e0: Edge, e1: Edge): Edge
+    public static add (e0: Edge, e1: Edge, terminal: QMDD): Edge
     {
         // sort to ensure identical sums arent saved multiple times (addition is commutative)
         const sorted = [e0, e1].sort((a, b) => a.dest.id - b.dest.id);
@@ -193,7 +193,7 @@ export class QMDD
         if (e0.dest.id === e1.dest.id) // if the pointed-to verteces are the same
             return { dest: e0.dest, weight: Complex.add(e0.weight, e1.weight) };
 
-        if (e0.dest.variable < e1.dest.variable) // if e0 precedes e1
+        if (e0.dest.variable > e1.dest.variable) // if e0 precedes e1
             [e0, e1] = [e1, e0];
 
         const edges: Edge[] = [];
@@ -204,9 +204,11 @@ export class QMDD
             const e1i = e1.dest.edges[i];
             const p: Edge = { dest: e0i.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0i.weight) };
             const q: Edge = e0.dest.variable === e1.dest.variable ?
-                { dest: e1i.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i.weight) }: e1;
+                { dest: e1i.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i.weight) }: 
+                { dest: e1.dest, weight: e1.weight };
             
-            edges.push(QMDD.add(p, q));
+            const sum = QMDD.add(p, q, terminal);
+            edges.push(sum.weight === 0 ? { dest: terminal, weight: 0 } : sum);
         }
         
         const sum = (edges.every(edge => edge.dest === edges[0].dest && edge.weight === edges[0].weight)) ?
@@ -228,7 +230,7 @@ export class QMDD
      * @param e1 An `Edge` pointing to the second `QMDD`.
      * @returns A new `Edge` pointing to the product `QMDD`.
      */
-    public static mul (e0: Edge, e1: Edge): Edge
+    public static mul (e0: Edge, e1: Edge, terminal: QMDD): Edge
     {
         // can't sort here (multiplication is not commutative)
         const key = `${e0.dest.id};${e1.dest.id};${e0.weight};${e1.weight}`; 
@@ -240,12 +242,12 @@ export class QMDD
             [e0, e1] = [e1, e0];
 
         if (e0.weight === 0)
-            return { dest: e0.dest, weight: e0.weight };
+            return { dest: terminal, weight: 0 };
 
         if (e0.dest.isTerminal())
             return { dest: e1.dest, weight: Complex.mul(e0.weight, e1.weight) };
 
-        if (e0.dest.variable < e1.dest.variable) // if e0 precedes e1
+        if (e0.dest.variable > e1.dest.variable) // if e0 precedes e1
             [e0, e1] = [e1, e0];
 
         for (const [id, other] of [[e0, e1], [e1, e0]]) if (id.dest.isIdentity)
@@ -258,20 +260,22 @@ export class QMDD
 
         for (const i of [0, 2]) for (const j of [0, 1])
         {
-            // done like this so the initial zero edge isnt needed and thus the terminal doesnt need to be inserted as an input
-            const e0_i0 = e0.dest.edges[i];
-            const e1_j0 = e1.dest.edges[j];
-            const p0: Edge = { dest: e0_i0.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0_i0.weight) };
-            const q0: Edge = e0.dest.variable === e1.dest.variable ?
-                {dest: e1_j0.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1_j0.weight) }: e1;
-            
-            const e0_i1 = e0.dest.edges[i + 1];
-            const e1_j2 = e1.dest.edges[j + 2];
-            const p1: Edge = { dest: e0_i1.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0_i1.weight) };
-            const q1: Edge = e0.dest.variable === e1.dest.variable ?
-                {dest: e1_j2.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1_j2.weight) }: e1;
+            let e = { dest: terminal, weight: 0 };
 
-            edges.push(QMDD.add(QMDD.mul(p0, q0), QMDD.mul(p1, q1)));
+            for (const k of [0, 1])
+            {
+                const e0_ik = e0.dest.edges[i + k];
+                const e1_jk = e1.dest.edges[j + 2 * k];
+                const p: Edge = { dest: e0_ik.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0_ik.weight) };
+                const q: Edge = e0.dest.variable === e1.dest.variable ?
+                    { dest: e1_jk.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1_jk.weight) }:
+                    { dest: e1.dest, weight: e1.weight };
+                
+                const prod = QMDD.mul(p, q, terminal);
+                const sum = QMDD.add(e, prod.weight === 0 ? { dest: terminal, weight: 0 }: prod, terminal);
+                e = sum.weight === 0 ? { dest: terminal, weight: 0 } : sum; 
+            }
+            edges.push(e);
         }
 
         const prod = (edges.every(edge => edge.dest === edges[0].dest && edge.weight === edges[0].weight)) ?
@@ -354,9 +358,9 @@ export class QMDD
 
             if (col.some(gate => gate instanceof Control))
                 // if controls are present, create the inactive version and add them together
-                step = QMDD.add(step, this.step(col, terminal, false))
+                step = QMDD.add(step, this.step(col, terminal, false), terminal)
 
-            entry = QMDD.mul(entry, step);
+            entry = QMDD.mul(entry, step, terminal);
         }
 
         return entry;

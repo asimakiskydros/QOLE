@@ -286,6 +286,26 @@ export class S extends Gate
 }
 
 /**
+ * The conjugate transpose (dagger) of `S`.
+ */
+export class Sdag extends Gate
+{
+    // all Sdag gates are fundamentally the same, make them singletons.
+    private static singleton: Sdag | null = null;
+
+    constructor ()
+    {
+        if (Sdag.singleton)
+            return Sdag.singleton;
+
+        super();
+        Sdag.singleton = this;
+    }
+
+    public override matrix (): number[] { return [1, 0, 0, Complex.NEG_I]; }
+}
+
+/**
  * An eighth turn around the z-axis on the Bloch sphere.
  */
 export class T extends Gate
@@ -302,6 +322,25 @@ export class T extends Gate
     }
 
     public override matrix (): number[] { return [1, 0, 0, Complex.B]; }
+}
+
+/**
+ * An eighth turn around the z-axis on the Bloch sphere.
+ */
+export class Tdag extends Gate
+{
+    private static singleton: Tdag | null = null;
+
+    constructor ()
+    {
+        if (Tdag.singleton)
+            return Tdag.singleton;
+
+        super();
+        Tdag.singleton = this;
+    }
+
+    public override matrix (): number[] { return [1, 0, 0, Complex.C]; }
 }
 
 /**
@@ -389,6 +428,17 @@ export class CS extends ControlledGate
     constructor (ctrlState: string | number = '1')
     {
         super(1, [new S()], ctrlState);
+    }
+}
+
+/**
+ * A controlled version of the dagger of S.
+ */
+export class CSdag extends ControlledGate
+{
+    constructor (ctrlState: string | number = '1')
+    {
+        super(1, [new Sdag()], ctrlState);
     }
 }
 

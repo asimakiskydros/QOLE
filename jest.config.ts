@@ -8,7 +8,7 @@ const config: Config =
     testMatch: ['**/tests/**/*.test.ts'],
     collectCoverage: true,
     coverageProvider: 'v8',
-    collectCoverageFrom: ['src/**/*.ts', 'tests/**/*.ts'],
+    collectCoverageFrom: ['src/**/*.ts', 'tests/**/*test.ts'],
     clearMocks: true,
     testEnvironment: 'node',
     silent: false,

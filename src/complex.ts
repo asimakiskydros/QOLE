@@ -91,9 +91,13 @@ export class Complex
      */
     public static readonly NEG_A = 6;
     /**
-     * The index of the imaginary square root of one half.
+     * The index of `1/sqrt(2)+j/sqrt(2)`.
      */
     public static readonly B = 7;
+    /**
+     * The index of the conjugate of `Complex.B`.
+     */
+    public static readonly C = 8;
 
     constructor (a: number, b: number, c: number, d: number, e: number = 1)
     {
@@ -334,6 +338,7 @@ export class Complex
         new Complex( 0, 0,-1, 0); // 0-1j                 -> NEG_I
         new Complex( 0,-1, 0, 0); // -1/sqrt(2)+0j        -> NEG_A  
         new Complex( 0, 1, 0, 1); // 1/sqrt(2)+1/sqrt(2)j -> B
+        new Complex( 0, 1, 0,-1); // 1/sqrt(2)-1/sqrt(2)j -> C
     }
 }
 

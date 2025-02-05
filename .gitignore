@@ -23,3 +23,7 @@ jest-logs/
 experiment/
 
 legacy/
+
+benchmarks/
+
+*.benchmark.*

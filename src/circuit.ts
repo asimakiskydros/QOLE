@@ -7,7 +7,7 @@
 import { QMDD } from "./qmdd";
 import { 
     Control, ControlledGate, CS, CX, CY, CZ, Gate, H, 
-    I, MCX, S, X, Y, Z, CCX, CCZ, CH, T } from "./gates";
+    I, MCX, S, X, Y, Z, CCX, CCZ, CH, T, CSdag, Tdag, Sdag} from "./gates";
 
 /**
  * A quantum algorithm represented as a cascade of quantum logical steps.
@@ -263,21 +263,23 @@ export class QuantumCircuit
     /**
      * Adds an S (square root of Z) gate on the given qubit index.
      * @param qubit The qubit index to include the gate on.
+     * @param dagger If `true`, instead adds the conjugate transpose (dagger) of S on `qubit`.
      * @returns `this` circuit instance.
      */
-    public s (qubit: number): QuantumCircuit
+    public s (qubit: number, dagger = false): QuantumCircuit
     {
-        return this.append(new S(), [qubit]);
+        return this.append(dagger ? new Sdag() : new S(), [qubit]);
     }
 
     /**
      * Adds a T (fourth root of Z) gate on the given qubit index.
      * @param qubit The qubit inddex to include the gate on.
+     * @param dagger If `true`, instead adds the conjugate transpose (dagger) of T on `qubit`.
      * @returns `this` circuit instance.
      */
-    public t (qubit: number): QuantumCircuit
+    public t (qubit: number, dagger = false): QuantumCircuit
     {
-        return this.append(new T(), [qubit]);
+        return this.append(dagger ? new Tdag() : new T(), [qubit]);
     }
 
     /**
@@ -433,11 +435,12 @@ export class QuantumCircuit
      * @param control The index of the control qubit.
      * @param target The index of the target qubit.
      * @param ctrlState The control state to activate on.
+     * @param dagger If `true`, instead adds a controlled version of the conjugate transpose of S.
      * @returns `this` circuit instance.
      */
-    public cs (control: number, target: number, ctrlState?: string | number): QuantumCircuit
+    public cs (control: number, target: number, ctrlState?: string | number, dagger = false): QuantumCircuit
     {
-        return this.append(new CS(ctrlState), [control, target]);
+        return this.append(dagger ? new CSdag(ctrlState): new CS(ctrlState), [control, target]);
     }
 
     /**

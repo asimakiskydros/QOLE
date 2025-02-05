@@ -125,10 +125,25 @@ export class QMDD
      */
     private trivialize (): boolean
     {
-        const isIdentity = this.isTerminal() 
-            || (this.edges.every((edge, i) => edge.weight === ((i === 0 || i === 3) ? 1 : 0))
-            &&  this.edges.every(edge => edge.dest.isIdentity));
+        let isIdentity = false;
 
+        if (this.isTerminal())
+            isIdentity = true;
+        else
+        {
+            // the diagonal edges (00, 11) point to the same destination, which is an identity, with the same nonzero weight
+            const flag1 = this.edges[0].dest.id === this.edges[3].dest.id 
+                && this.edges[0].weight === this.edges[3].weight
+                && this.edges[0].weight !== 0
+                && this.edges[0].dest.isIdentity;
+            // the other edges (01, 10) are zero edges
+            const flag2 = this.edges[1].dest.id === this.edges[2].dest.id
+                && this.edges[1].weight === this.edges[2].weight
+                && this.edges[1].weight === 0
+                && this.edges[1].dest.isTerminal();
+
+            isIdentity = flag1 && flag2;
+        }
         if (isIdentity && !this.isTerminal())
         {
             // pop the common descendant from the cache temporarily

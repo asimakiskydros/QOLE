@@ -4,23 +4,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { Control, Gate } from "./gates";
-import { Complex } from "./complex";
-
-/**
- * Calculates the states of all skipped variables in the path
- * by generating all possible binary numbers for the given number of `bits`.
- * @param variables The number of variables skipped.
- * @yields All valid binary strings, 0-based, starting from the biggest one.
- */
-function* skipped (variables: number): Generator<string>
-{
-    if (variables === 0)
-        // return the empty string so the normal case (no vars skipped) can work as well
-        yield '';
-    else for (let i = (1 << variables) - 1; i >= 0 ; i--)
-        yield i.toString(2).padStart(variables, '0');
-}
+import { Gate } from "./gates";
+import { Complex, mapSetReturn } from "./complex";
 
 /**
  * Rounds the given `value` to the specified `decimal` places.
@@ -38,7 +23,10 @@ function round (value: number, decimals: number): number
 /**
  * A weighted directed link connecting two QMDD verteces. 
  */
-export type Edge = { dest: QMDD, weight: number };
+type _Edge<T extends QMDD> = { dest: T, weight: number };
+export type Edge = _Edge<QMDD>;
+export type VectorEdge = _Edge<VectorQMDD>;
+export type MatrixEdge = _Edge<MatrixQMDD>;
 
 /**
  * A vertex representing the four quadrants of a unitary matrix.
@@ -46,25 +34,21 @@ export type Edge = { dest: QMDD, weight: number };
 export class QMDD
 {
     /**
-     * `true` if `this` QMDD branch represents the identity matrix.
-     */
-    public readonly isIdentity: boolean;
-    /**
      * The index of the qubit described by `this` QMDD.
      */
-    public readonly variable: number;
+    private readonly variable: number;
     /**
      * The unique identifier of `this` QMDD vertex.
      */
-    public readonly id!: number;
+    private id!: number;
     /**
-     * The local scalar complex value for all edge weights.
+     * The selection probability of `this` QMDD vertex.
      */
-    public scalar: number;
+    private prob: number;
     /**
      * The outgoing edges of `this` QMDD vertex. Empty for `terminal`.
      */
-    public edges: Edge[];
+    public readonly edges: Edge[];
 
     // unique identifier generator
     private static count: number = 0;
@@ -74,107 +58,102 @@ export class QMDD
     private static prods    = new Map<string, Edge>();
 
     /**
-     * Creates a new `QMDD` vertex representing qubit #`variable`, with the given set of `outgoing` edges.
-     * Automatically normalizes and minimizes itself to save on verteces.
-     * @param variable The qubit index `this` vertex represents.
-     * @param outgoing The set of outgoing edges. The weights will get normalized.
-     * @param scalar (Optional) The global scalar of the vertex. This might change during the vertex' lifetime.
+     * Creates a new `QMDD` vertex (`!!!` unsafely) representing qubit #`variable`, with the given set of `outgoing` edges.
+     * Automatically normalizes itself.
+     * @param variable The qubit index `this` `Vertex` element represents.
+     * @param outgoing The set of outgoing `Edge` objects.
      * @returns A new `QMDD` vertex instance, or an old one, if already existant.
      */
-    constructor (variable: number = -1, outgoing: Edge[] = [], scalar: number = 1)
+    constructor (variable: number, outgoing: Edge[] = [])
     {
         this.variable = variable;
-        [this.edges, this.scalar] = this.normalize(outgoing, scalar);
-        this.isIdentity = this.trivialize(); 
-
-        // if the described vertex already exists, use the old version
-        if (QMDD.verteces.has(this.toString())) return QMDD.verteces.get(this.toString())!;
-
-        QMDD.verteces.set(this.toString(), this);
-        this.id = QMDD.count++;
-    }
-
-    /**
-     * Normalizes `this` by ensuring the first non-0 edge weight is 1,
-     * per 10.1109/CEC.2006.1688610 and Rule 1 in 10.1007/978-3-642-38986-3_11
-     * 
-     * The common factor is stored in the scalar.
-     */
-    private normalize (edges: Edge[], scalar: number): [Edge[], number]
-    {
-        if (edges.length === 0) return [edges, scalar];
-
-        const factor = edges.find(el => el.weight !== 0)!.weight;
-
-        for (const edge of edges)
-            edge.weight = Complex.div(edge.weight, factor);
-
-        return [edges, Complex.mul(scalar, factor)];
-    }
-
-    /**
-     * Self-labels `this` as an identity (or trivial) branch iff
-     * it and all of its children follow the (scaled) identity matrix or
-     * are the terminal.
-     * 
-     * Scalar factors are ballooned to the root scalar.
-     * 
-     * The `QMDD` is assumed to be normalized.
-     * 
-     * @returns `true` if `this` represents an identity branch. 
-     */
-    private trivialize (): boolean
-    {
-        let isIdentity = false;
-
-        if (this.isTerminal())
-            isIdentity = true;
-        else
-        {
-            // the diagonal edges (00, 11) point to the same destination, which is an identity, with the same nonzero weight
-            const flag1 = this.edges[0].dest.id === this.edges[3].dest.id 
-                && this.edges[0].weight === this.edges[3].weight
-                && this.edges[0].weight !== 0
-                && this.edges[0].dest.isIdentity;
-            // the other edges (01, 10) are zero edges
-            const flag2 = this.edges[1].dest.id === this.edges[2].dest.id
-                && this.edges[1].weight === this.edges[2].weight
-                && this.edges[1].weight === 0
-                && this.edges[1].dest.isTerminal();
-
-            isIdentity = flag1 && flag2;
-        }
-        if (isIdentity && !this.isTerminal())
-        {
-            // pop the common descendant from the cache temporarily
-            QMDD.verteces.delete(this.edges[0].dest.toString());
-
-            // balloon the accumulated scalar up to the root of the identity tree,
-            // as this makes multiplication faster and only the root will ever be accessed
-            this.scalar = Complex.mul(this.scalar, this.edges[0].dest.scalar);
-            this.edges[0].dest.scalar = 1;
-            
-            // re-save the descendand to the cache with the new scalar
-            QMDD.verteces.set(this.edges[0].dest.toString(), this.edges[0].dest);
-        }
-
-        return isIdentity;
+        this.edges = outgoing;
+        this.prob = 1;  // only the terminal should be using the raw constructor (without createVertex immediately after)
+                        // so this should be safe
     }
 
     /**
      * Serializes `this` QMDD vertex. Useful for accessing caches.
-     * @returns A serialization in the format of `"var;scalar;dest0;dest1;...;w0;w1;.."`
+     * @returns A serialization in the format of `"var;dest0;dest1;...;w0;w1;.."`
      */
     public toString (): string
     {
         const dests = this.edges.map(edge => edge.dest.id).join(';');
         const weights = this.edges.map(edge => edge.weight).join(';');
 
-        return `${this.variable};${this.scalar};${dests};${weights}`;
+        return `${this.variable};${dests};${weights}`;
     }
 
     /**
-     * Checks whether `this` is the terminal vertex. A vertex is considered the terminal
+     * Normalizes the edges of `this` by the selected rule.
+     * 
+     * `Rule #1` Divide all weights by the first nonzero weight.
+     * 
+     * `Rule #2` (Omitted)
+     * 
+     * `Rule #3` Divide all weights by the first weight exhibiting the maximum magnitude.
+     * 
+     * @param rule What normalization rule to enforce.
+     * @returns The common factor as an index to `Complex`.
+     */
+    private normalize (rule: 1 | 3 = 3): number
+    {
+        if (this.isTerminal()) return 1;  // no edges to normalize
+
+        const factor = rule === 1 
+            ? this.edges.find(el => el.weight !== 0)!.weight   // Rule 1
+            : Complex.argmax(this.edges.map(el => el.weight)); // Rule 3
+
+        if (factor !== 0)
+            for (const [i, edge] of this.edges.entries())
+                this.edges[i] = { dest: edge.dest, weight: Complex.div(edge.weight, factor) };
+
+        if (this instanceof VectorQMDD)
+            // update selection probability
+            this.prob = 
+                this.edges[0].dest.prob * Complex.get(this.edges[0].weight)!.mag2() + 
+                this.edges[1].dest.prob * Complex.get(this.edges[1].weight)!.mag2()
+
+        return factor;
+    }
+
+    /**
+     * Checks whether `this` `Vertex` object resembles the identity matrix.
+     * This occurs when `this` has edges e00, e11 point to the same
+     * `Vertex` with the same weight, and e01, e10 are 0-edges.
+     * @returns `true` if `this` resembles the identity matrix.
+     */
+    private isTrivial (): boolean
+    {
+        if (!(this instanceof VectorQMDD) && !this.isTerminal() && (
+            // if e00 and e11 point to a common dest with equal nonzero weight...
+            this.edges[0].weight === this.edges[3].weight &&
+            this.edges[0].dest === this.edges[3].dest &&
+            this.edges[0].weight !== 0 &&
+            // ...and e10, e01 are zero-edges...
+            this.edges[1].weight === this.edges[2].weight &&
+            this.edges[1].weight === 0
+        ))
+            return true;
+
+        return false;
+    }
+
+    /**
+     * Checks whether `this` is a redundant `Vertex`. A `Vertex` object is redundant if it's not the terminal
+     * and all its edges point to the same destination with the same weight.
+     * @returns `true` if `this.edges` is filled with (qualitative) equivalent elements. 
+     */
+    private isRedundant (): boolean
+    {
+        return !(this instanceof VectorQMDD) && !this.isTerminal() && this.edges.every(edge =>
+            edge.dest === this.edges[0].dest &&
+            edge.weight === this.edges[0].weight
+        );
+    }
+
+    /**
+     * Checks whether `this` is the terminal `Vertex`. A `Vertex` object is considered the terminal
      * iff it has no outgoing edges.
      * @returns `true` if the edge list is zero.
      */
@@ -184,251 +163,337 @@ export class QMDD
     }
 
     /**
-     * Adds two QMDDs pointed to by the given edges according to
-     * `10.1109/CEC.2006.1688610`.
-     * @param e0 An `Edge` pointing to the first `QMDD`.
-     * @param e1 An `Edge` pointing to the second `QMDD`.
-     * @returns A new `Edge` pointing to the sum `QMDD`.
+     * Safely creates a new `Vertex` terminal for a quantum operator of the given `width`.
+     * @param width The number of qubits that will participate in this diagram.
+     * @returns A `QMDD Vertex` terminal object.
      */
-    public static add (e0: Edge, e1: Edge, terminal: QMDD): Edge
+    public static createTerminal (width: number): QMDD
     {
-        // sort to ensure identical sums arent saved multiple times (addition is commutative)
-        const sorted = [e0, e1].sort((a, b) => a.dest.id - b.dest.id);
+        let vertex = new QMDD(width);
+
+        // if a terminal with the same width mark was requested before, prioritize it
+        if (QMDD.verteces.has(vertex.toString())) vertex = QMDD.verteces.get(vertex.toString())!; 
+        // otherwise, put the new terminal into the lookup table
+        else 
+        {
+            QMDD.verteces.set(vertex.toString(), vertex);
+            vertex.id = QMDD.count++;
+        }
+        return vertex;
+    }
+
+    /**
+     * Safely creates a new `Vertex` object as described and returns an `Edge` pointing to it.
+     * 
+     * `!!!` Always use this instead of the raw constructor.
+     * 
+     * If `outgoing` resembles the identity matrix (up to a scalar `ρ`), then the returned `Edge`'s weight
+     * is `ρ` and it points to the ancestor `Vertex` (skips this qubit). Otherwise the weight is 1.
+     * @param variable The qubit index `this` vertex represents.
+     * @param outgoing The set of outgoing edges. The weights will get normalized.
+     * @param terminal The global terminal `QMDD Vertex`.
+     * @param rule (Optional) The normalization rule to enforce (1 or 3)
+     * @returns An `Edge` pointing to the resulting `Vertex` instance.     
+     */
+    public static createVertex (variable: number, outgoing: Edge[], terminal: QMDD, rule: 1 | 3 = 3): Edge
+    {
+        let vertex = 
+            outgoing.length === 2 ? new VectorQMDD(variable, outgoing[0], outgoing[1]):
+            outgoing.length === 4 ? new MatrixQMDD(variable, outgoing[0], outgoing[1], outgoing[2], outgoing[3]):
+                                    new QMDD(variable, [...outgoing]);
+        let weight = vertex.normalize(rule);
+
+        // due to how vector Verteces are defined here, it can arise that all edge weights are 0
+        // in that scenario, the vertex is redundant and its edge becomes a zero edge.
+        if (weight === 0) return { dest: terminal, weight: 0 };
+        // if trivial or redundant, discard vertex and point to its ancestor
+        if (vertex.isTrivial() || vertex.isRedundant()) vertex = vertex.edges[0].dest;
+        // if the described vertex already exists, use the old version
+        else if (QMDD.verteces.has(vertex.toString())) vertex = QMDD.verteces.get(vertex.toString())!; 
+        // put the new vertex into the lookup table
+        else 
+        {
+            QMDD.verteces.set(vertex.toString(), vertex);
+            vertex.id = QMDD.count++;
+        }
+
+        return { dest: vertex, weight: weight };
+    }
+
+    /**
+     * Returns a vector `QMDD` initialized on the ground state.
+     * @param terminal The global terminal `QMDD Vertex`.
+     * @returns An `Edge` object pointing to the ground state vector `QMDD`.
+     */
+    public static groundState (terminal: QMDD): VectorEdge
+    {
+        let e = { dest: terminal, weight: 1 };
+
+        for (let variable = terminal.variable - 1; variable > -1; variable--)  // the terminal has the circuit width as variable
+            e = QMDD.createVertex(variable, [e, { dest: terminal, weight: 0 }], terminal);
+
+        return e;
+    }
+
+    /**
+     * Performs addition on the two given `QMDD`s, assumed to represent two equally-sized tensors of the same rank. 
+     * @param tensor1 The `Edge` object pointing to the first `QMDD`.
+     * @param tensor2 The `Edge` object pointing to the second `QMDD`.
+     * @param terminal The global terminal `QMDD Vertex`.
+     * @param level (Implementation detail - ignore) The `Vertex` level concerning the operation. 
+     * @returns An `Edge` object pointing to the `QMDD` representing the sum of `tensor1` and `tensor2`.
+     */
+    public static add (tensor1: Edge, tensor2: Edge, terminal: QMDD, level?: number): Edge
+    {
+        if (level === undefined) level = Math.min(tensor1.dest.variable, tensor2.dest.variable);  // todo: they do nonterminal checks, must proofcheck this
+
+        if (tensor1.weight === 0)
+            return { dest: tensor2.weight === 0 ? terminal : tensor2.dest, weight: tensor2.weight };
+
+        if (tensor2.weight === 0)
+            return { dest: tensor1.dest, weight: tensor1.weight };
+
+        if (tensor1.dest === tensor2.dest)  // todo: check whether id is needed here or otherwise completely useless
+            return { dest: tensor1.dest, weight: Complex.add(tensor1.weight, tensor2.weight) };
+
+        const sorted = [tensor1, tensor2].sort((a, b) => a.dest.id - b.dest.id);
         const key = `${sorted[0].dest.id};${sorted[1].dest.id};${sorted[0].weight};${sorted[1].weight}`; 
 
         if (QMDD.sums.has(key)) // reuse existing sums
             return { dest: QMDD.sums.get(key)!.dest, weight: QMDD.sums.get(key)!.weight };
-        
-        if (e1.dest.isTerminal())
-            [e0, e1] = [e1, e0];
-        
-        if (e0.weight === 0) // check only the weight as the zero edges must lead to the terminal
-            return { dest: e1.dest, weight: e1.weight };
-
-        if (e0.dest.id === e1.dest.id) // if the pointed-to verteces are the same
-            return { dest: e0.dest, weight: Complex.add(e0.weight, e1.weight) };
-
-        if (e0.dest.variable > e1.dest.variable) // if e0 precedes e1
-            [e0, e1] = [e1, e0];
 
         const edges: Edge[] = [];
+        const rank = tensor1.dest instanceof VectorQMDD ? 1 : 2;
 
-        for (let i = 0; i < 4; i++)
+        for (let i = 0; i < 2 * rank; i++)
         {
-            const e0i = e0.dest.edges[i];
-            const e1i = e1.dest.edges[i];
-            const p: Edge = { dest: e0i.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0i.weight) };
-            const q: Edge = e0.dest.variable === e1.dest.variable ?
-                { dest: e1i.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1i.weight) }: 
-                { dest: e1.dest, weight: e1.weight };
-            
-            const sum = QMDD.add(p, q, terminal);
-            edges.push(sum.weight === 0 ? { dest: terminal, weight: 0 } : sum);
+            let e0: Edge, e1: Edge;
+
+            if (tensor1.dest.isTerminal() || tensor1.dest.variable > level)
+                // if the tensor skips a variable or goes straight to the terminal, handle as if it is an identity
+                //                            the e0, e3 quadrants are smaller identities     the e1, e2 quadrants are 0
+                e0 = (i === 0 || i === 3) ? { dest: tensor1.dest, weight: tensor1.weight } : { dest: terminal, weight: 0 };
+            else
+                // select the tensor's ith edge and bubble down the entry weight
+                e0 = { dest: tensor1.dest.edges[i].dest, weight: Complex.mul(tensor1.weight, tensor1.dest.edges[i].weight) };
+
+            if (tensor2.dest.isTerminal() || tensor2.dest.variable > level)  // same for the other tensor
+                e1 = (i === 0 || i === 3) ? { dest: tensor2.dest, weight: tensor2.weight } : { dest: terminal, weight: 0 };
+            else
+                e1 = { dest: tensor2.dest.edges[i].dest, weight: Complex.mul(tensor2.weight, tensor2.dest.edges[i].weight) };
+
+            edges.push(QMDD.add(e0, e1, terminal, level + 1));
         }
-        
-        const sum = (edges.every(edge => edge.dest === edges[0].dest && edge.weight === edges[0].weight)) ?
-            // if all computed edges point to the same vertex with the same weight,
-            // skip this sum entirely and point to the common destination
-            { dest: edges[0].dest, weight: edges[0].weight }: 
-            // if not, create the new vertex (normal case)
-            { dest: new QMDD(e0.dest.variable, edges), weight: 1 };
 
-        QMDD.sums.set(key, sum);
-
-        return sum;
+        return mapSetReturn(QMDD.sums, key, QMDD.createVertex(level, edges, terminal));
     }
 
     /**
-     * Multiplies two QMDDs together, pointed to by the given edges, according to
-     * `10.1109/CEC.2006.1688610`. 
-     * @param e0 An `Edge` pointing to the first `QMDD`.
-     * @param e1 An `Edge` pointing to the second `QMDD`.
-     * @returns A new `Edge` pointing to the product `QMDD`.
+     * Performs matrix-vector multiplication on the given tensor `QMDD`s. `!!!` Order matters. 
+     * @param matrix The `Edge` object pointing to the matrix `QMDD`.
+     * @param vector The `Edge` object pointing to the vector `QMDD`.
+     * @param terminal The global terminal `QMDD Vertex`.
+     * @param level (Implementation detail - ignore) The `Vertex` level concerning the operation.
+     * @returns An `Edge` object pointing to the `QMDD` representing the product `matrix`*`vector`.
      */
-    public static mul (e0: Edge, e1: Edge, terminal: QMDD): Edge
+    public static multiply (matrix: MatrixEdge, vector: VectorEdge, terminal: QMDD, level?: number): Edge
     {
-        // can't sort here (multiplication is not commutative)
-        const key = `${e0.dest.id};${e1.dest.id};${e0.weight};${e1.weight}`; 
+        if (level === undefined) level = Math.min(matrix.dest.variable, vector.dest.variable);  // todo: they do nonterminal checks, must proofcheck this
+
+        if (matrix.weight === 0 || vector.weight === 0)
+            return { dest: terminal, weight: 0 };
+
+        if (matrix.dest.isTerminal())
+            return { dest: vector.dest, weight: Complex.mul(vector.weight, matrix.weight) };
+
+        const key = `${matrix.dest.id};${vector.dest.id};${matrix.weight};${vector.weight}`; 
 
         if (QMDD.prods.has(key)) // reuse existing products
             return { dest: QMDD.prods.get(key)!.dest, weight: QMDD.prods.get(key)!.weight };
 
-        if (e1.dest.isTerminal())
-            [e0, e1] = [e1, e0];
+        const edges: VectorEdge[] = [{ dest: terminal, weight: 0 }, { dest: terminal, weight: 0 }];
 
-        if (e0.weight === 0)
-            return { dest: terminal, weight: 0 };
-
-        if (e0.dest.isTerminal())
-            return { dest: e1.dest, weight: Complex.mul(e0.weight, e1.weight) };
-
-        if (e0.dest.variable > e1.dest.variable) // if e0 precedes e1
-            [e0, e1] = [e1, e0];
-
-        for (const [id, other] of [[e0, e1], [e1, e0]]) if (id.dest.isIdentity)
-            return {
-                dest: other.dest,
-                weight: Complex.mul(id.weight, id.dest.scalar, other.weight)
-            };
-
-        const edges: Edge[] = [];
-
-        for (const i of [0, 2]) for (const j of [0, 1])
+        for (const i of [0, 1]) for (const j of [0, 1])
         {
-            let e = { dest: terminal, weight: 0 };
+            /**                                                              initial edges[i]
+             *i = 0: (j=0,1) edges0 = max.e0*vec.e0 + max.e1*vec.e1 (+ 0) <--------|
+             *i = 1: (j=0,1) edges1 = max.e2*vec.e0 + max.e3*vec.e1 (+ 0) <--------v
+             *=============> edges[i] = max.e[2i+0]*vec[0] + max.e[2i+1]*vec[1] (+ 0)
+             *                                   ^       ^            ^       ^ 
+             *                                  j=0     j=0          j=1     j=1
+             */
+            const v: Edge = vector.dest.edges[j];
+            const m: Edge = 
+                matrix.dest.variable === level ? matrix.dest.edges[2 * i + j] :  // if matrix variable agrees with the level, proceed
+                i == j ? { dest: matrix.dest, weight: 1 } : { dest: terminal, weight: 0 };  // otherwise, deal with the matrix as if it is an identity
 
-            for (const k of [0, 1])
-            {
-                const e0_ik = e0.dest.edges[i + k];
-                const e1_jk = e1.dest.edges[j + 2 * k];
-                const p: Edge = { dest: e0_ik.dest, weight: Complex.mul(e0.dest.scalar, e0.weight, e0_ik.weight) };
-                const q: Edge = e0.dest.variable === e1.dest.variable ?
-                    { dest: e1_jk.dest, weight: Complex.mul(e1.dest.scalar, e1.weight, e1_jk.weight) }:
-                    { dest: e1.dest, weight: e1.weight };
-                
-                const prod = QMDD.mul(p, q, terminal);
-                const sum = QMDD.add(e, prod.weight === 0 ? { dest: terminal, weight: 0 }: prod, terminal);
-                e = sum.weight === 0 ? { dest: terminal, weight: 0 } : sum; 
-            }
-            edges.push(e);
+            // due to the selected order, the level must increase to go down the tree
+            edges[i] = QMDD.add(edges[i], QMDD.multiply(m, v, terminal, level + 1), terminal, level + 1);
         }
-
-        const prod = (edges.every(edge => edge.dest === edges[0].dest && edge.weight === edges[0].weight)) ?
-            // if all computed edges point to the same vertex with the same weight,
-            // skip this product entirely and point to the common destination
-            { dest: edges[0].dest, weight: edges[0].weight } : 
-            // if not, create the new vertex (normal case)
-            { dest: new QMDD(e0.dest.variable, edges), weight: 1 };
-        
-        QMDD.prods.set(key, prod);
-
-        return prod; 
+        const e = QMDD.createVertex(level, edges, terminal);
+        return mapSetReturn(QMDD.prods, key, { dest: e.dest, weight: Complex.mul(e.weight, matrix.weight, vector.weight) });  
     }
 
     /**
-     * Builds a new `QMDD` according to the given `repr` instruction, following
-     * `10.1007/978-3-319-59936-6_17`.
-     * @param repr The step representation to turn into a `QMDD`.
-     * @param terminal The `QMDD` to use as the global terminal.
-     * @param active If `true`, the active part of the step will be created. If `false`, the inactive.
-     * @returns An `Edge` pointing to the `QMDD` tree representing the given step.
+     * Constructs the passed `Gate` description as a `QMDD`.
+     * @param gate The `Gate` element that operates on the `target` qubit.
+     * @param target The index of the target qubit.
+     * @param controls Control information concerning the gate. If not controlled, pass an empty list.
+     * @param terminal The global terminal `QMDD Vertex`.
+     * @returns An `Edge` object pointing to the `QMDD` representing the specified `gate`.
      */
-    public static step (repr: Gate[], terminal: QMDD, active = true): Edge
+    public static construct (gate: Gate, target: number, controls: { index: number, state: string }[], terminal: QMDD): MatrixEdge
     {
-        let root = terminal;
-        let trivial = terminal;
+        let q = 0;
+        const ctrls = controls.sort((a, b) => b.index - a.index);  // in descending order so deeper indices are first
+        const root: MatrixEdge[] = gate.matrix().map(el => ({ dest: terminal, weight: el }));
+        const reusable: MatrixEdge[] = [
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+            { dest: terminal, weight: 0 },
+        ];
 
-        for (let i = repr.length - 1; i >= 0; i--)
-        {
-            const gate = repr[i];
-            const edges: Edge[] = ((gate instanceof Control || active) ? 
-                gate.matrix() : [1, 0, 0, 1])
-                .map(amp => ({ dest: amp === 0 ? terminal : root, weight: amp }));
-
-            if (!active && gate instanceof Control)
+        // handle the controls below the target (if no controls, skip)
+        for (; q < ctrls.length && ctrls[q].index > target; q++)
+            for (const i of [0, 1]) for (const j of [0, 1])
             {
-                const [dest, weight] = trivial === root ? [terminal, 0] : [root, 1]; 
+                // a 0-control activates on e0 (0 === 00 -> |0>~>|0>), while an 1-control on e3 (3 === 11 -> |1>~>|1>)
+                const [activator, antiactivator] = (ctrls[q].state === '0' ? [0, 3] : [3, 0]);
+                const edge = 2 * i + j;
                 
-                edges[gate.antiactivator()] = { dest: trivial, weight: 1 };
-                edges[gate.activator()] = { dest: dest, weight: weight };
+                reusable[activator] = root[edge];
+                reusable[antiactivator] = { dest: terminal, weight: (i === j ? 1 : 0) };
+
+                root[edge] = QMDD.createVertex(ctrls[q].index, reusable, terminal);
             }
 
-            const prev = root;
-            root = new QMDD(i, edges);
-            
-            if (active) continue;
-            // update the root of the identity branch 
-            // to minimize verteces, if the current QMDD is equal to
-            // the identity branch, use that one,
-            // else create a new identity vertex pointing to the previous
-            // identity branch
-            if (gate instanceof Control || trivial !== prev)
-                trivial = new QMDD(i, [
-                    { dest: trivial,  weight: 1 },
-                    { dest: terminal, weight: 0 },
-                    { dest: terminal, weight: 0 },
-                    { dest: trivial,  weight: 1 },
-                ]);            
-            else
-                trivial = root;
-        }
+        // handle the target
+        let entry = QMDD.createVertex(target, root, terminal);
 
-        return { dest: root, weight: 1 };
-    }
-
-    /**
-     * Constructs the given `circuit` instance as a single, unified `QMDD`.
-     * @param circuit The cascade of gates to turn into a `QMDD`.
-     * @param depth The number of vertex layers (the number of declared qubits).
-     * @returns An `Edge` pointing to the `QMDD` tree representing the given `circuit`.
-     */
-    public static build (circuit: Gate[][], depth: number): Edge
-    {
-        const terminal = new QMDD(depth);
-        let entry: Edge = { dest: terminal, weight: 1 };
-
-        for (const col of circuit)
+        // handle the controls above the target (if no controls, skip)
+        for (; q < ctrls.length; q++)
         {
-            let step = this.step(col, terminal);
+            const [activator, antiactivator] = (ctrls[q].state === '0' ? [0, 3] : [3, 0]);
 
-            if (col.some(gate => gate instanceof Control))
-                // if controls are present, create the inactive version and add them together
-                step = QMDD.add(step, this.step(col, terminal, false), terminal)
+            reusable[activator] = entry;
+            reusable[antiactivator] = { dest: terminal, weight: 1 };
 
-            entry = QMDD.mul(entry, step, terminal);
+            entry = QMDD.createVertex(ctrls[q].index, reusable, terminal);
         }
 
         return entry;
     }
 
     /**
-     * Traverses the `QMDD` diagram in preorder DFS fashion, according to
-     * `https://s2.smu.edu/~mitch/ftp_dir/pubs/rmw07a.pdf`. A merged technique of both
-     * the implicit and the explicit schemes is used here, by assuming that the
-     * initialization is already included in the QMDD and by only following the 0-path.
-     * @param entry The `Edge` pointing to the root of the `QMDD`.
+     * Constructs an entire uncontrolled step as a unified matrix `QMDD`.
+     * @param gates Gate information (operation, target) about the step.
+     * @param terminal The global terminal `QMDD Vertex`.
+     * @returns An `Edge` object pointing to the matrix `QMDD` implementing the described step.
+     */
+    public static uncontrolledStep (gates: { operator: Gate, target: number }[], terminal: QMDD): MatrixEdge
+    {
+        const step = gates.sort((a, b) => b.target - a.target);  // in descending order so deeper targets are first
+        let e: MatrixEdge = { dest: terminal, weight: 1 };
+
+        for (const { operator, target } of step)
+        {
+            const matrix = operator.matrix().map(el => Complex.mul(el, e.weight));
+            const edges: MatrixEdge[] = [
+                { dest: matrix[0] === 0 ? terminal : e.dest, weight: matrix[0] },
+                { dest: matrix[1] === 0 ? terminal : e.dest, weight: matrix[1] },
+                { dest: matrix[2] === 0 ? terminal : e.dest, weight: matrix[2] },
+                { dest: matrix[3] === 0 ? terminal : e.dest, weight: matrix[3] },
+            ];
+            e = QMDD.createVertex(target, edges, terminal);
+        }
+
+        return e;
+    }
+
+    /**
+     * Traverses the vector `QMDD` diagram in full, in preorder DFS fashion, to calculate the amplitudes of all nonzero basis states.
+     * @param entry The `Edge` pointing to the root of the vector `QMDD`.
      * @param decimals The number of decimal places of precision to keep for the amplitudes.
      * @yields The resulting statevector in chunks of `{state, Re(amp), Im(amp)}`.
      */
-    public static* evaluate (entry: Edge, decimals: number = 4): Generator<{ state: string, real: number, imag: number }>
+    public static* strongSimulate (entry: VectorEdge, decimals: number): Generator<{ state: string, re: number, im: number }>
     {
-        const stack: { vertex: QMDD, state: string, weight: number }[] = [];
-        // account for any initial skipped variables
-        for (const vars of skipped(entry.dest.variable))
-            stack.push({ vertex: entry.dest, state: vars, weight: entry.weight });
+        if (entry.weight === 0)
+            throw new Error(`Error in QMDD.strongSimulate(): The passed entry is a zero edge.`);
+
+        if (entry.dest.isTerminal())
+            throw new Error(`Error in QMDD.strongSimulate(): The passed entry is a terminal edge.`);
+        
+        const stack: { v: QMDD, w: number, s: string}[] = [{ v: entry.dest, w: entry.weight, s: '' }];
 
         while (stack.length > 0)
         {
-            const { vertex, state, weight } = stack.pop()!;
+            const { v, w, s } = stack.pop()!;
 
-            if (vertex.isTerminal())
+            if (v.isTerminal())
             {
-                const complex = Complex.get(weight)!;
                 // states are assumed to be patched and weights are assumed to be nonzero due to the next loop.
-                yield { 
-                    state: state, 
-                    real: round(complex.re(), decimals), 
-                    imag: round(complex.im(), decimals)
-                };
+                const complex = Complex.get(w)!;
+                yield { state: s, re: round(complex.re(), decimals), im: round(complex.im(), decimals) };
                 continue;
             }
-            
-            // traverse all child verteces corresponding to the 0-path (edges 0, 1), nullify other edges
-            // add new entries to the stack in reverse so traversal is done preorder-ly.
+            // traverse preorderly
             for (const i of [1, 0])
-            {
-                const edge = vertex.edges[i];
-
-                if (edge.weight === 0) continue;
-
-                // push all 0-paths of this vertex (patching skipped variables along the way)
-                // in reverse order so preorder can continue later
-                for (const vars of skipped(edge.dest.variable - vertex.variable - 1))
-                    stack.push({ 
-                        vertex: edge.dest,
-                        state: vars + (i === 0 ? '0' : '1') + state, 
-                        weight: Complex.mul(weight, edge.weight, vertex.scalar) });                
-            }
+                if (v.edges[i].weight !== 0)
+                    stack.push({ v: v.edges[i].dest, w: Complex.mul(w, v.edges[i].weight), s: (i === 0 ? '0' : '1') + s });
         }
+    }
+
+    /**
+     * Performs single-shot weak simulation on the given `entry` vector `QMDD`.
+     * The `QMDD` is not altered during traversal.
+     * @param entry The entry `Edge` of the `QMDD` to simulate.
+     * @param qubits The number of qubits present in the vector described by the `QMDD`.
+     * @param rand A seeded RPNG to decide "collapse" at each qubit with.
+     * @returns A `string` describing the "measured" basis state, and its amplitude, as a 'number' pair.
+     */
+    public static weakSimulate (entry: VectorEdge, qubits: number, rand: () => number): [string, number, number]
+    {
+        if (entry.weight === 0)
+            throw new Error(`Error in QMDD.weakSimulate(): The passed entry is a zero edge.`);
+
+        if (entry.dest.isTerminal())
+            throw new Error(`Error in QMDD.weakSimulate(): The passed entry is a terminal edge.`);
+
+        const state = Array(qubits).fill('0');
+        let amplitude = entry.weight;
+
+        while (!entry.dest.isTerminal())
+        {
+            const o0 = entry.dest.edges[0].dest.prob * Complex.get(entry.dest.edges[0].weight)!.mag2();  // "odds" of measuring |0>
+            const o1 = entry.dest.edges[1].dest.prob * Complex.get(entry.dest.edges[1].weight)!.mag2();  // "odds" of measuring |1>
+            const p0 = o0 / (o0 + o1);  // probability ratio of measuring |0> (the entry weight gets eliminated)
+
+            const i = rand() < p0 ? 0 : 1;
+            state[qubits - entry.dest.variable - 1] = String(i);
+            amplitude = Complex.mul(amplitude, entry.dest.edges[i].weight);
+            entry = entry.dest.edges[i];
+        }
+
+        const cmplx = Complex.get(amplitude)!;
+
+        return [state.join(''), cmplx.re(), cmplx.im()];
+    }
+}
+
+export class VectorQMDD extends QMDD
+{
+    constructor (variable: number, e0: Edge, e1: Edge)
+    {
+        super(variable, [e0, e1]);
+    }
+}
+
+export class MatrixQMDD extends QMDD
+{
+    constructor (variable: number, e0: Edge, e1: Edge, e2: Edge, e3: Edge)
+    {
+        super(variable, [e0, e1, e2, e3]);
     }
 }

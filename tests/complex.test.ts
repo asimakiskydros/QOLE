@@ -23,6 +23,11 @@ describe('Complex: ', () =>
         expect(new Complex(-1, -2, -3, -4, -5).toString()).toBe('1;2;3;4;5');
     });
 
+    test('Initialization with mixed signs', () =>
+    {
+        expect(new Complex(1, -2, 3, -4, -5).toString()).toBe('-1;2;-3;4;5');
+    });
+
     test('Creating existing non-default value', () =>
     {
         expect(new Complex(1, 2, 3, 4).index).toBe(new Complex(2, 4, 6, 8, 2).index);
@@ -34,6 +39,12 @@ describe('Complex: ', () =>
 
         expect(complex.re()).toBeCloseTo(1.73965047, 8);
         expect(complex.im()).toBeCloseTo(1.3221661, 7);
+    });
+
+    test('Verifying square magnitude of non-default instance', () =>
+    {
+        const complex = new Complex(10, 8, 2, 14, 9);
+        expect(complex.mag2()).toBeCloseTo(4.77450695, 7);
     });
 
     test('Multiplying by the reciprocal', () =>
@@ -172,7 +183,7 @@ describe('Complex: ', () =>
         expect(final.im()).toBeCloseTo(0, 5);
     });
 
-    test('Passing wrong indeces in add, mul, div', () =>
+    test('Passing wrong indeces in add, mul, div, argmax', () =>
     {
         expect(() => { Complex.add(0.5, -1); }).toThrow('Error in Complex.add(): Out of bounds value passed.');
         
@@ -181,20 +192,44 @@ describe('Complex: ', () =>
         expect(() => { Complex.div(2, 'a')}).toThrow('Error in Complex.div(): Out of bounds value passed.');
 
         expect(() => { Complex.mul(); }).toThrow('Error in Complex.mul(): No values passed.');
+
+        expect(() => { Complex.argmax([]); }).toThrow('Error in Complex.argmax(): No values passed.');
+
+        expect(() => { Complex.argmax([10_000, 1]); }).toThrow('Error in Complex.argmax(): Out of bounds value passed.');
+    });
+
+    test('Argmaxing a single element', () =>
+    {
+        expect(Complex.argmax([1])).toBe(1);
+    });
+
+    test('Argmaxing over the default values', () =>
+    {
+        expect(Complex.argmax([Complex.ZERO, Complex.ONE, Complex.A, Complex.NEG_ONE, Complex.I, Complex.NEG_I, Complex.NEG_A, Complex.B, Complex.C]))
+        .toBe(Complex.ONE);  // ONE, NEG_ONE, I, NEG_I, B and C all give the max square magnitude 1. Since ONE is first, that should be returned.
+    });
+
+    test('Argmaxing over custom values', () =>
+    {
+        const expected  = new Complex(1, 1, 1, 1).index;
+        const other     = new Complex(10, 8, 2, 14, 9).index;
+
+        expect(Complex.argmax([Complex.NEG_ONE, expected, other])).toBe(expected);
     });
 });
 
 describe('Complex: Creating default value', () =>
 {
     const data: [number, number[]][] = [
-        [Complex.ZERO,    [ 0,  0,  0, 0]],
-        [Complex.ONE,     [ 1,  0,  0, 0]],
-        [Complex.A,       [ 0,  1,  0, 0]],
-        [Complex.NEG_ONE, [-1,  0,  0, 0]],
-        [Complex.I,       [ 0,  0,  1, 0]],
-        [Complex.NEG_I,   [ 0,  0, -1, 0]],
-        [Complex.NEG_A,   [ 0, -1,  0, 0]],
-        [Complex.B,       [ 0,  1,  0, 1]]];
+        [Complex.ZERO,    [ 0,  0,  0,  0]],
+        [Complex.ONE,     [ 1,  0,  0,  0]],
+        [Complex.A,       [ 0,  1,  0,  0]],
+        [Complex.NEG_ONE, [-1,  0,  0,  0]],
+        [Complex.I,       [ 0,  0,  1,  0]],
+        [Complex.NEG_I,   [ 0,  0, -1,  0]],
+        [Complex.NEG_A,   [ 0, -1,  0,  0]],
+        [Complex.B,       [ 0,  1,  0,  1]],
+        [Complex.C,       [ 0,  1,  0, -1]]];
 
     for (const [og, def] of data)
         test(`i(${og})`, () =>

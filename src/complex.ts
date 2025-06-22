@@ -11,11 +11,26 @@
  * @returns The GCD of the sequence.
  */
 const gcd = (...nums: number[]) => nums.reduce((a, b) => {
+    a = Math.abs(a);
+    b = Math.abs(b);
     while (b) 
         [a, b] = [b, a % b];
     
     return a;
 });
+
+/**
+ * Convenience function to set an `element` into a lookup table and also return it in a single line.
+ * @param map The lookup table to inform.
+ * @param key The key of the new element.
+ * @param element The element to save inside the lookup table.
+ * @returns The `element` as is.
+ */
+export function mapSetReturn<T> (map: Map<string, T>, key: string, element: T): T
+{
+    map.set(key, element);
+    return element;
+}
 
 /**
  * A representation of a complex number with the format
@@ -103,13 +118,9 @@ export class Complex
     {
         if (e === 0) throw new Error('Error in Complex(): Division by zero.');
 
-        const f = gcd(a, b, c, d, e);
-
-        this.A = a / f;
-        this.B = b / f;
-        this.C = c / f;
-        this.D = d / f;
-        this.E = e / f;
+        // normalize by gcd and enforce the denominator to always be positive for canonicity
+        const f = gcd(a, b, c, d, e) * (e < 0 ? -1 : 1);
+        [this.A, this.B, this.C, this.D, this.E] = [a / f, b / f, c / f, d / f, e / f];
         
         const i = Complex.complex2i.get(this.toString());
 
@@ -215,6 +226,15 @@ export class Complex
     }
 
     /**
+     * The (square) magnitude of the complex number.
+     * @returns The unwrapped, floating point value of the square magnitude of `this`.
+     */
+    public mag2 (): number
+    {
+        return this.re() ** 2 + this.im() ** 2;
+    }
+
+    /**
      * Serializes `this` Complex number. Useful for accessing caches.
      * @returns A serialization of the format `"A;B;C;D;E"`.
      */
@@ -260,11 +280,7 @@ export class Complex
         if (Complex.sums.has(`${first},${second}`))
             return Complex.sums.get(`${first},${second}`)!; // reuse saved sums
 
-        const sum = Complex.i2complex[first].add(Complex.i2complex[second]).index; 
-
-        Complex.sums.set(`${first},${second}`, sum);
-
-        return sum;
+        return mapSetReturn(Complex.sums, `${first},${second}`, Complex.i2complex[first].add(Complex.i2complex[second]).index);
     }
 
     /**
@@ -290,9 +306,7 @@ export class Complex
         for (let i = 1; i < indeces.length; i++)
             prod = prod.mul(Complex.i2complex[indeces[i]]);
  
-        Complex.prods.set(key, prod.index);
-
-        return prod.index;
+        return mapSetReturn(Complex.prods, key, prod.index);
     }
 
     /**
@@ -310,11 +324,37 @@ export class Complex
         if (Complex.quots.has(`${numerator},${denominator}`))
             return Complex.quots.get(`${numerator},${denominator}`)!; // reuse saved divisions
 
-        const quot = Complex.i2complex[numerator].div(Complex.i2complex[denominator]).index;
- 
-        Complex.quots.set(`${numerator},${denominator}`, quot);
+        return mapSetReturn(Complex.quots, `${numerator},${denominator}`, Complex.i2complex[numerator].div(Complex.i2complex[denominator]).index);
+    }
 
-        return quot;
+    /**
+     * Finds the first of the passed elements (in the given order) that exhibits the largest `Complex` magnitude.
+     * @param indices The indices of the `Complex` objects to compare on magnitude.
+     * @param tolerance (Optional) The margin of error allowed to assume equality.
+     * @returns the first of the elements with the maximum magnitude.
+     */
+    public static argmax (indices: number[], tolerance: number = 0.000001): number
+    {
+        if (indices.length < 1) 
+            throw new Error('Error in Complex.argmax(): No values passed.');
+
+        for (const el of indices) if (!Complex.has(el))
+            throw new Error('Error in Complex.argmax(): Out of bounds value passed.');
+
+        let greatest = indices[0];
+        let max = indices.length > 1 ? Complex.i2complex[greatest].mag2() : 0; // if only a single element was passed, dont bother
+
+        for (let i = 1; i < indices.length; i++)
+        {
+            const mag = Complex.i2complex[indices[i]].mag2();
+
+            if (mag - max > tolerance)
+            {
+                greatest = indices[i];
+                max = mag;
+            }
+        }
+        return greatest;
     }
 
     /**

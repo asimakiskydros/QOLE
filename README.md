@@ -55,20 +55,34 @@ which circumvents the exponential overhead of representing a full statevector in
 
 Shot-based sampling also yields the theoretical amplitudes of the occurred basis states "for free".
 
-## Installation (NOTE: Not yet operational)
+## Installation
 
-You can install QOLE as a standalone package through NPM:
-
+To use QOLE in your JavaScript project, you can install it directly from NPM:
 ```
 npm install qole
 ```
-From here, you can access the `QuantumCircuit` class directly and get to work
-
-```JavaScript
-    import { QuantumCircuit } from 'qole';
+From there, you can access the `QuantumCircuit` class directly and get to work. QOLE currently supports only the CommonJS module type:
+```javascript
+const { QuantumCircuit } = require('qole');
 ```
 
-or you can peer into the implementation details through the modules `'qole.gates'`, `'qole.qmdd'` and `'qole.complex'`.
+Import pulls type information for QOLE-specific classes, making it viable for TypeScript-based projects as well.
+
+Interested users can also access implementation-level functions as sub-directories:
+```javascript
+const { X } = require('qole/gates');
+const { QMDD } = require('qole/qmdd');
+const { Complex } = require('qole/complex');
+```
+
+### Local Installation
+To install the project locally, paste the following in your IDE bash:
+```
+git clone https://github.com/asimakiskydros/QOLE.git
+cd QOLE
+npm install
+npm run build
+```
 
 ## QMDD Backend
 
@@ -95,7 +109,7 @@ Please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Citation
 
 If you use this project in your research, kindly consider citing it as:
-> Asimakis Kydros. (2025). QOLE: A QMDD-based Quantum Circuit Simulator (Version 2.0.0) \[Computer software\]. https://github.com/asimakiskydros/QOLE
+> Asimakis Kydros. (2025). QOLE: A QMDD-based Quantum Circuit Simulator (Version 2.1.0) \[Computer software\]. https://github.com/asimakiskydros/QOLE
 
 ## Licence
 

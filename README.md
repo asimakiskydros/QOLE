@@ -1,5 +1,7 @@
 # QOLE
 
+[![npm version](https://img.shields.io/npm/v/qole.svg)](https://www.npmjs.com/package/qole)
+
 The **Q**uantum **O**perations **L**azy **E**valuator is an easy-to-use Software Development Kit for executing quantum circuits in JavaScript. Behind its simplistic, [Qiskit](https://github.com/Qiskit/qiskit)-like interface, lies a simulation backend based on Quantum Multiple-Valued Decision Diagrams (QMDDs).
 
 Whether you need to incorporate reversible/quantum algorithmic functionality to your JS project, or you want to benchmark the performance of QMDDs, QOLE is the tool for you.

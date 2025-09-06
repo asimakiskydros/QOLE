@@ -1,8 +1,11 @@
 {
   "name": "qole",
-  "version": "2.0.0",
-  "main": "./dist/index.js",
-  "type": "module",
+  "version": "2.1.0",
+  "main": "./dist/circuit.js",
+  "types": "./dist/circuit.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "jest",
@@ -21,7 +24,7 @@
     "TypeScript"
   ],
   "author": "Asimakis Kydros",
-  "license": "ISC",
+  "license": "MPL-2.0",
   "description": "The Quantum Operations Lazy Evaluator is a simulator for executing Quantum Circuits, leveraging the memory-compactness of QMDDs.",
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -32,9 +35,25 @@
     "typescript": "^5.6.3"
   },
   "exports": {
-    ".": "./dist/circuit.js",
-    "./gates": "./dist/gates.js",
-    "./qmdd": "./dist/qmdd.js",
-    "./complex": "./dist/complex.js"
+    ".": {
+      "require": "./dist/circuit.js",
+      "types": "./dist/circuit.d.ts"
+    },
+    "./gates": {
+      "require": "./dist/gates.js",
+      "types": "./dist/gates.d.ts"
+    },
+    "./qmdd": {
+      "require": "./dist/qmdd.js",
+      "types": "./dist/qmdd.d.ts"
+    },
+    "./complex": {
+      "require": "./dist/complex.js",
+      "types": "./dist/complex.d.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asimakiskydros/QOLE.git"
   }
 }

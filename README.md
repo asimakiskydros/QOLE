@@ -90,7 +90,7 @@ npm run build
 
 The actual simulation is done through these Decision Diagrams. For an initial introduction to QMDDs, please refer to [Zulehner and Wille,  	arXiv:1707.00865 (2017)]( https://doi.org/10.48550/arXiv.1707.00865).
 
-This project acts as a mini-review of the topic, merging together implementation details scattered throughout the literature. Specifically, the main sources followed are:
+This project acts as a review/tutorial of the topic, merging together implementation details scattered throughout the literature. You can find the published tutorial on [Kydros et al. (2025)](https://doi.org/10.1007/s11128-025-04917-0). The main sources followed are:
 
 - [A. Zulehner and R. Wille. "Advanced Simulation of Quantum Computations". arXiv:1707.00865 (2017)](https://doi.org/10.48550/arXiv.1707.00865)
 - [R. Wille et al. "Decision Diagrams for Quantum Computing". In: Topaloglu, R.O. (eds) Design Automation of Quantum Computers. Springer, Cham. https://doi.org/10.1007/978-3-031-15699-1_1](https://doi.org/10.1007/978-3-031-15699-1_1)
@@ -102,7 +102,7 @@ This project acts as a mini-review of the topic, merging together implementation
 - [D. Goodman et al. "Quantum logic circuit simulation based on the QMDD data structure." Int’l Reed-Muller Workshop (2007)](https://s2.smu.edu/~mitch/ftp_dir/pubs/rmw07a.pdf)
 - [A. Zulehner et al. "Accuracy and Compactness in Decision Diagrams for Quantum Computation". 2019 Design, Automation & Test in Europe Conference & Exhibition (DATE), Florence, Italy, 2019, pp. 280-283, doi: 10.23919/DATE.2019.8715040](https://doi.org/10.23919/DATE.2019.8715040)
 
-while also consulting the rest of the bibliography, as well as [the implementation in MQT](https://github.com/munich-quantum-toolkit/core), for further optimization techniques. A full documentation explaining the entire QMDD implementation is in the works.
+while also consulting the rest of the bibliography, as well as [the implementation in MQT](https://github.com/munich-quantum-toolkit/core), for further optimization techniques.
 
 ## Contributing
 
@@ -110,7 +110,9 @@ Please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Citation
 
-If you use this project in your research, kindly consider citing it as:
+If the explanatory nature of this project is useful to your research, please consider citing its [published version](https://doi.org/10.1007/s11128-025-04917-0) in your manuscript.
+
+Alternatively, if you make use of just the package itself in your project, citing as below would be most appreciated:
 > Asimakis Kydros. (2025). QOLE: A QMDD-based Quantum Circuit Simulator (Version 2.1.0) \[Computer software\]. https://github.com/asimakiskydros/QOLE
 
 ## Licence

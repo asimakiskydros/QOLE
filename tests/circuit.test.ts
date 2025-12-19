@@ -70,6 +70,52 @@ describe('QuantumCircuit: ', () =>
 
             expect([depth1, qc.depth()]).toEqual([2, 3]);
         });
+    
+    test('.depth() after .cswap(); rightmost on control', () =>
+    {
+        const qc = new QuantumCircuit(3);
+        
+        qc.x(0).cswap(0, 1, 2);
+        
+        const depth1 = qc.depth();
+
+        qc.x(1);
+
+        const depth2 = qc.depth();
+
+        qc.x(2);
+
+        const depth3 = qc.depth();
+
+        qc.x(2);
+
+        const depth4 = qc.depth();
+
+        expect([depth1, depth2, depth3, depth4]).toEqual([2, 3, 3, 4]);
+    });
+
+    test('.depth() after .cswap(); rightmost on targets', () =>
+    {
+        const qc = new QuantumCircuit(3);
+
+        qc.x(1).cswap(0, 1, 2);
+
+        const depth1 = qc.depth();
+
+        qc.x(2);
+
+        const depth2 = qc.depth();
+
+        qc.x(0);
+
+        const depth3 = qc.depth();
+
+        qc.x(0);
+
+        const depth4 = qc.depth();
+
+        expect([depth1, depth2, depth3, depth4]).toEqual([2, 3, 3, 4]);
+    });
 
     describe('Erroneous inputs in .append(): ', () =>
     {

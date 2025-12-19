@@ -105,6 +105,35 @@ export class QuantumCircuit
     }
 
     /**
+     * Updates the `this.cols` property by modeling the inclusion of a multi-qubit-span gate
+     * onto the main register by "shinking" it as left as the rightmost existing column allows.
+     * In other words, the column of the gate is immediately after the rightmost column among
+     * all participant qubits. Then `this.cols` becomes the max between this new column and the
+     * previous `this.cols`.
+     * @param indices The span of the gate to include in qubit indices.
+     * @param reset If `true`, reset the entire register to 0 columns.
+     */
+    private updateColumns (indices: number[], reset = false)
+    {
+        if (reset)
+        {
+            // reset to base case
+            this.cols = 0;
+            this.qbuckets = Array(this.qubits).fill(0);
+            return;
+        }
+        // as the multi-span shinks to the left, eventually the gate gets stuck on a
+        // column on at least one qubit. This is the rightmost position, +1 is then
+        // the inserted gate's column.
+        const rightmost = 1 + Math.max(...Array.from(indices, i => this.qbuckets[i]));
+
+        for (const i of indices)
+            this.qbuckets[i] = rightmost;
+        // update all participant qubit buckets to the new column index and set the new `this.cols`.
+        this.cols = Math.max(this.cols, rightmost);
+    }
+
+    /**
      * Returns the width of the `QuantumCircuit` object, i.e. the number of its declared qubits.
      */
     public width (): number
@@ -157,8 +186,7 @@ export class QuantumCircuit
         
         // create the gate as a QMDD and multiply it to the current statevector
         this.diagram = QMDD.multiply(QMDD.construct(gate, target, unified, this.terminal), this.diagram, this.terminal);
-        // update step counters
-        for (const i of temp) this.cols = Math.max(this.cols, ++this.qbuckets[i]);
+        this.updateColumns(temp);
 
         return this;
     }
@@ -187,8 +215,7 @@ export class QuantumCircuit
 
         // create the gate as a QMDD and multiply it to the current statevector
         this.diagram = QMDD.multiply(QMDD.uncontrolledStep(step, this.terminal), this.diagram, this.terminal);
-        // update step counters
-        for (const i of qubits) this.cols = Math.max(this.cols, ++this.qbuckets[i]);
+        this.updateColumns(qubits);
 
         return this;
     }
@@ -217,8 +244,7 @@ export class QuantumCircuit
             'l': () => [new X(), new H(), new S()]  // |-i>: XHS
         };
         // reset the diagram back to all zeros
-        this.cols = 0;
-        this.qbuckets = Array(this.qubits).fill(0);
+        this.updateColumns([], true);
         this.diagram = QMDD.groundState(this.terminal);
 
         for (let i = 0; i < state.length; i++)
@@ -495,6 +521,7 @@ export class QuantumCircuit
     public cswap (control: number, first: number, second: number, ctrlState?: string): QuantumCircuit
     {
         const state = ctrlState ?? '1';
+        const rightmost = 1 + Math.max(this.qbuckets[first], this.qbuckets[second], this.qbuckets[control]);
 
         // DOI:10.1103/PHYSREVA.53.2855
         this
@@ -505,11 +532,18 @@ export class QuantumCircuit
         .ccx(control, first, second, state === '0' ? '10' : state === '1' ? '11' : state)
         .cx(second, first);
 
-        // every .cx internally calls .append, iterating the relevant qubit counters thrice
-        // this is probably unexpected on the user side, since this could increase the depth counter by more than 1
-        // even though a single operation was requested (no matter how SWAP actually decomposes into elementaries)
-        this.qbuckets[first]  -= 2;
-        this.qbuckets[second] -= 2;
+        /**
+         * every .cx and .ccx internally calls .append, iterating the relevant qubit counters
+         * multiple times. This is probably unexpected on the user side, since this would increase
+         * the depth counter by more than 1 even though a single operation was requested (no matter how
+         * SWAP actually decomposes into elementaries).
+         * 
+         * In the controlled case, it is more complicated than .swap() due to the control. Manually
+         * re-updating the buckets is the safest choice.
+         */
+        this.qbuckets[first] = rightmost;
+        this.qbuckets[second] = rightmost;
+        this.qbuckets[control] = rightmost;
         this.cols = Math.max(...this.qbuckets);
 
         return this;

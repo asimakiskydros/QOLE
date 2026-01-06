@@ -4,8 +4,9 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { Gate, H, I, S, T, X, Y, Z } from "./gates";
 import { VectorEdge, QMDD } from "./qmdd";
+import { QuantumGate, HGate, IGate, SGate, TGate, XGate, YGate, ZGate } from "./gates";
+
 
 /**
  * Generates a random string of the given `length`.
@@ -15,13 +16,13 @@ import { VectorEdge, QMDD } from "./qmdd";
  */
 function randomString (length: number = 16) 
 {
-    let result = '';
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    
-    for (let i = 0; i < length; i++)
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-    
-    return result;
+	let result = '';
+	const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	
+	for (let i = 0; i < length; i++)
+		result += characters.charAt(Math.floor(Math.random() * characters.length));
+	
+	return result;
 }
 
 /**
@@ -33,24 +34,24 @@ function randomString (length: number = 16)
  */
 function cyrb128 (str: string) 
 {
-    let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+	let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
   
-    for (let i = 0, k; i < str.length; i++) 
-    {
-        k = str.charCodeAt(i);
-        h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
-        h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
-        h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
-        h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
-    }
+	for (let i = 0, k; i < str.length; i++) 
+	{
+		k = str.charCodeAt(i);
+		h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+		h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+		h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+		h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+	}
   
-    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
-    h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
-    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
-    h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
-    h1 ^= (h2 ^ h3 ^ h4), h2 ^= h1, h3 ^= h1, h4 ^= h1;
+	h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+	h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+	h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+	h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+	h1 ^= (h2 ^ h3 ^ h4), h2 ^= h1, h3 ^= h1, h4 ^= h1;
   
-    return [h1>>>0, h2>>>0, h3>>>0, h4>>>0];
+	return [h1>>>0, h2>>>0, h3>>>0, h4>>>0];
 }
 
 /**
@@ -62,17 +63,17 @@ function cyrb128 (str: string)
  */
 function sfc32 (a: number, b: number, c: number, d: number): () => number
 {
-    return function () 
-    {
-        a |= 0; b |= 0; c |= 0; d |= 0;
-        let t = (a + b | 0) + d | 0;
-        d = d + 1 | 0;
-        a = b ^ b >>> 9;
-        b = c + (c << 3) | 0;
-        c = (c << 21 | c >>> 11);
-        c = c + t | 0;
-        return (t >>> 0) / 4294967296;
-    }
+	return function () 
+	{
+		a |= 0; b |= 0; c |= 0; d |= 0;
+		let t = (a + b | 0) + d | 0;
+		d = d + 1 | 0;
+		a = b ^ b >>> 9;
+		b = c + (c << 3) | 0;
+		c = (c << 21 | c >>> 11);
+		c = c + t | 0;
+		return (t >>> 0) / 4294967296;
+	}
 }
 
 /**
@@ -152,15 +153,15 @@ export class QuantumCircuit
 
     /**
      * Applies the passed `gate`, possibly controlled, on the specified qubit indices.
-     * @param gate The `Gate` object describing the operation to apply on the target qubit.
-     * @param target The index of the target qubit.
+     * @param gates The `Gate` object describing the operation to apply on the target qubit.
+     * @param targets The index of the target qubit.
      * @param controls The list of the control qubit indices. `!` Assumed in the same order as `ctrlState`. 
      * @param ctrlState The control state to activate on. `!` Assumed in the same order as `controls`.
      * @returns `this` circuit instance.
      */
-    public append (gate: Gate, target: number, controls: number[] = [], ctrlState: string = ""): QuantumCircuit
+    public append (gates: QuantumGate[], targets: number[], controls: number[] = [], ctrlState: string = ""): QuantumCircuit
     {
-        const temp = [target, ...controls];
+        const temp = [...targets, ...controls];
 
         if (temp.length > this.width()) throw new Error(
             `Error in QuantumCircuit.append(): Too many qubits requested (declared width is ${this.width()} but ${temp.length} indices were received).`);
@@ -174,18 +175,23 @@ export class QuantumCircuit
         if (controls.length > 0 && ctrlState === "")  // assume the nonspecified state is all 1-controls
             ctrlState = '1'.repeat(controls.length);
 
+        if (gates.length !== targets.length) throw new Error(
+            `Error in QuantumCircuit.append(): Unequal number of gates (${gates.length}) and target indices (${targets.length}) given.`);
+
         if (controls.length !== ctrlState.length) throw new Error(
             `Error in QuantumCircuit.append(): Unequal number of controls (${controls?.length}) and control states (${ctrlState?.length}) given.`);
 
         if (!/^[01]*$/.test(ctrlState)) throw new Error(
             `Error in QuantumCircuit.append(): Unrecognized character found in ctrlState, '0' or '1' were expected.`);
      
-        if (gate instanceof I) return this;  // skip if the passed gate is the identity
-
         const unified = controls.map((el, i) => ({ index: el, state: ctrlState!.at(i)! }));
         
-        // create the gate as a QMDD and multiply it to the current statevector
-        this.diagram = QMDD.multiply(QMDD.construct(gate, target, unified, this.terminal), this.diagram, this.terminal);
+        for (const [i, target] of targets.entries())
+        {
+            if (gates[i] instanceof IGate) return this;  // skip if the passed gate is the identity
+            // create the gate as a QMDD and multiply it to the current statevector
+            this.diagram = QMDD.multiply(QMDD.construct(gates[i], target, unified, this.terminal), this.diagram, this.terminal);
+        }
         this.updateColumns(temp);
 
         return this;
@@ -197,7 +203,7 @@ export class QuantumCircuit
      * @param qubits A list of indices describing the target qubits. Assumed to be in the same order as `gates`.
      * @returns `this` circuit instance.
      */
-    public appendStep (gates: Gate[], qubits: number[]): QuantumCircuit
+    public appendStep (gates: QuantumGate[], qubits: number[]): QuantumCircuit
     {
         if (gates.length !== qubits.length) throw new Error(
             `Error in QuantumCircuit.appendStep(): Unequal number of gates (${gates.length}) and qubit indices (${qubits.length}) given.`);
@@ -211,7 +217,9 @@ export class QuantumCircuit
         for (const i of qubits) if (i < 0 || i >= this.width()) throw new Error(
             `Error in QuantumCircuit.appendStep(): Out of bounds qubit requested (received index ${i}, expected [0, ${this.width()})).`);
 
-        const step = gates.map((el, i) => ({ operator: el, target: qubits[i] }));
+        const step = [];
+        for (const [i, gate] of gates.entries())
+            step.push({ operator: gate, target: qubits[i] });
 
         // create the gate as a QMDD and multiply it to the current statevector
         this.diagram = QMDD.multiply(QMDD.uncontrolledStep(step, this.terminal), this.diagram, this.terminal);
@@ -234,14 +242,14 @@ export class QuantumCircuit
         if (!/^[01+-rl]+$/.test(state)) throw new Error(
             `Error in QuantumCircuit.initialize(): Unrecognized character found in state, '0', '1', '+', '-', 'r' or 'l' were expected.`);
 
-        const handler: Record<string, () => Gate[]> = 
+        const handler: Record<string, () => QuantumGate[]> = 
         {
-            '0': () => [new I()],                   // |0>:  Change nothing 
-            '1': () => [new X()],                   // |1>:  X
-            '+': () => [new H()],                   // |+>:  H
-            '-': () => [new X(), new H()],          // |->:  XH
-            'r': () => [new H(), new S()],          // |+i>: HS
-            'l': () => [new X(), new H(), new S()]  // |-i>: XHS
+            '0': () => [new IGate()],                   // |0>:  Change nothing 
+            '1': () => [new XGate()],                   // |1>:  X
+            '+': () => [new HGate()],                   // |+>:  H
+            '-': () => [new XGate(), new HGate()],          // |->:  XH
+            'r': () => [new HGate(), new SGate()],          // |+i>: HS
+            'l': () => [new XGate(), new HGate(), new SGate()]  // |-i>: XHS
         };
         // reset the diagram back to all zeros
         this.updateColumns([], true);
@@ -249,7 +257,7 @@ export class QuantumCircuit
 
         for (let i = 0; i < state.length; i++)
             for (const gate of handler[state[i]]()) 
-                this.append(gate, this.qubits - i - 1);  // in string notation, the first char is the MSB
+                this.append([gate], [this.qubits - i - 1]);  // in string notation, the first char is the MSB
 
         return this;
     }
@@ -310,10 +318,10 @@ export class QuantumCircuit
     public x (qubits: number | number[]): QuantumCircuit
     {
         if (typeof qubits === 'number')
-            return this.append(new X(), qubits);
+            return this.append([new XGate()], [qubits]);
 
         // safe because X is a singleton ----------------vvvvvvv
-        return this.appendStep(Array(qubits.length).fill(new X()), qubits);
+        return this.appendStep(Array(qubits.length).fill(new XGate()), qubits);
     }
 
     /**
@@ -324,10 +332,10 @@ export class QuantumCircuit
     public y (qubits: number | number[]): QuantumCircuit
     {
         if (typeof qubits === 'number')
-            return this.append(new Y(), qubits);
+            return this.append([new YGate()], [qubits]);
 
         // safe because Y is a singleton ----------------vvvvvvv
-        return this.appendStep(Array(qubits.length).fill(new Y()), qubits);
+        return this.appendStep(Array(qubits.length).fill(new YGate()), qubits);
     }
 
     /**
@@ -338,10 +346,10 @@ export class QuantumCircuit
     public z (qubits: number | number[]): QuantumCircuit
     {
         if (typeof qubits === 'number')
-            return this.append(new Z(), qubits);
+            return this.append([new ZGate()], [qubits]);
 
         // safe because Z is a singleton ----------------vvvvvvv
-        return this.appendStep(Array(qubits.length).fill(new Z()), qubits);
+        return this.appendStep(Array(qubits.length).fill(new ZGate()), qubits);
     }
 
     /**
@@ -352,10 +360,10 @@ export class QuantumCircuit
     public h (qubits: number | number[]): QuantumCircuit
     {
         if (typeof qubits === 'number')
-            return this.append(new H(), qubits);
+            return this.append([new HGate()], [qubits]);
 
         // safe because H is a singleton ----------------vvvvvvv
-        return this.appendStep(Array(qubits.length).fill(new H()), qubits);
+        return this.appendStep(Array(qubits.length).fill(new HGate()), qubits);
     }
 
     /**
@@ -367,10 +375,10 @@ export class QuantumCircuit
     public s (qubits: number | number[], dagger = false): QuantumCircuit
     {
         if (typeof qubits === 'number')
-            return this.append(new S(dagger), qubits);
+            return this.append([new SGate(dagger)], [qubits]);
 
         // safe because S/Sdag is a singleton ----------------vvvvvvv
-        return this.appendStep(Array(qubits.length).fill(new S(dagger)), qubits);        
+        return this.appendStep(Array(qubits.length).fill(new SGate(dagger)), qubits);        
     }
 
     /**
@@ -382,10 +390,10 @@ export class QuantumCircuit
     public t (qubits: number | number[], dagger = false): QuantumCircuit
     {
         if (typeof qubits === 'number')
-            return this.append(new T(dagger), qubits);
+            return this.append([new TGate(dagger)], [qubits]);
 
         // safe because T/Tdag is a singleton ----------------vvvvvvv
-        return this.appendStep(Array(qubits.length).fill(new T(dagger)), qubits);        
+        return this.appendStep(Array(qubits.length).fill(new TGate(dagger)), qubits);        
     }
 
     /**
@@ -397,7 +405,7 @@ export class QuantumCircuit
      */
     public cx (control: number, target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new X(), target, [control], ctrlState);
+        return this.append([new XGate()], [target], [control], ctrlState);
     }
 
     /**
@@ -410,7 +418,7 @@ export class QuantumCircuit
      */
     public ccx (first: number, second: number, target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new X(), target, [second, first], ctrlState);
+        return this.append([new XGate()], [target], [second, first], ctrlState);
     }
 
     /**
@@ -422,7 +430,7 @@ export class QuantumCircuit
      */
     public mcx (controls: number[], target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new X(), target, controls, ctrlState);
+        return this.append([new XGate()], [target], controls, ctrlState);
     }
 
     /**
@@ -434,7 +442,7 @@ export class QuantumCircuit
      */
     public cy (control: number, target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new Y(), target, [control], ctrlState);
+        return this.append([new YGate()], [target], [control], ctrlState);
     }
 
     /**
@@ -446,7 +454,7 @@ export class QuantumCircuit
      */
     public cz (control: number, target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new Z(), target, [control], ctrlState);
+        return this.append([new ZGate()], [target], [control], ctrlState);
     }
 
     /**
@@ -459,7 +467,7 @@ export class QuantumCircuit
      */
     public ccz (first: number, second: number, target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new Z(), target, [second, first], ctrlState);
+        return this.append([new ZGate()], [target], [second, first], ctrlState);
     }
 
     /**
@@ -471,7 +479,7 @@ export class QuantumCircuit
      */
     public ch (control: number, target: number, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new H(), target, [control], ctrlState);
+        return this.append([new HGate()], [target], [control], ctrlState);
     }
 
     /**
@@ -481,9 +489,9 @@ export class QuantumCircuit
      * @param ctrlState The control state to activate on.
      * @returns `this` circuit instance.
      */
-    public cs (control: number, target: number, ctrlState?: string): QuantumCircuit
+    public cs (control: number, target: number, dagger = false, ctrlState?: string): QuantumCircuit
     {
-        return this.append(new S(), target, [control], ctrlState);
+        return this.append([new SGate(dagger)], [target], [control], ctrlState);
     }
 
     /**
@@ -541,8 +549,8 @@ export class QuantumCircuit
          * In the controlled case, it is more complicated than .swap() due to the control. Manually
          * re-updating the buckets is the safest choice.
          */
-        this.qbuckets[first] = rightmost;
-        this.qbuckets[second] = rightmost;
+        this.qbuckets[first]   = rightmost;
+        this.qbuckets[second]  = rightmost;
         this.qbuckets[control] = rightmost;
         this.cols = Math.max(...this.qbuckets);
 

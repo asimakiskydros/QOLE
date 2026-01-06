@@ -4,7 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { Gate } from "./gates";
+import { QuantumGate } from "./gates";
 import { Complex, mapSetReturn } from "./complex";
 
 /**
@@ -342,7 +342,7 @@ export class QMDD
      * @param terminal The global terminal `QMDD Vertex`.
      * @returns An `Edge` object pointing to the `QMDD` representing the specified `gate`.
      */
-    public static construct (gate: Gate, target: number, controls: { index: number, state: string }[], terminal: QMDD): MatrixEdge
+    public static construct (gate: QuantumGate, target: number, controls: { index: number, state: string }[], terminal: QMDD): MatrixEdge
     {
         let q = 0;
         const ctrls = controls.sort((a, b) => b.index - a.index);  // in descending order so deeper indices are first
@@ -391,7 +391,7 @@ export class QMDD
      * @param terminal The global terminal `QMDD Vertex`.
      * @returns An `Edge` object pointing to the matrix `QMDD` implementing the described step.
      */
-    public static uncontrolledStep (gates: { operator: Gate, target: number }[], terminal: QMDD): MatrixEdge
+    public static uncontrolledStep (gates: { operator: QuantumGate, target: number }[], terminal: QMDD): MatrixEdge
     {
         const step = gates.sort((a, b) => b.target - a.target);  // in descending order so deeper targets are first
         let e: MatrixEdge = { dest: terminal, weight: 1 };

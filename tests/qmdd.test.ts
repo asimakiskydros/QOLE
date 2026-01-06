@@ -1,5 +1,5 @@
 import { Complex } from "../src/complex";
-import { H, I, S, T, X } from "../src/gates";
+import { HGate, IGate, SGate, TGate, XGate } from "../src/gates";
 import { Edge, QMDD } from "../src/qmdd";
 
 describe('QMDD: ', () =>
@@ -96,7 +96,7 @@ describe('QMDD: ', () =>
             let e = QMDD.groundState(ter);
 
             for (let i = 0; i < qubits; i++)
-                e = QMDD.multiply(QMDD.construct(new I(), i, [], ter), e, ter);
+                e = QMDD.multiply(QMDD.construct(new IGate(), i, [], ter), e, ter);
 
             expect(e.weight).toBe(1);
 
@@ -112,9 +112,9 @@ describe('QMDD: ', () =>
         describe('Uncontrolled step: ', () =>
         {
             const step = [
-                { operator: new X(), target: 0 },
-                { operator: new H(), target: 1 },
-                { operator: new S(), target: 2 },
+                { operator: new XGate(), target: 0 },
+                { operator: new HGate(), target: 1 },
+                { operator: new SGate(), target: 2 },
             ];
             const qubits = step.length;
             const ter = QMDD.createTerminal(qubits);
@@ -148,8 +148,8 @@ describe('QMDD: ', () =>
         {
             const qubits = 2;
             const ter = QMDD.createTerminal(qubits);
-            const posctrl = QMDD.construct(new X(), 1, [{ index: 0, state: '1' }], ter);
-            const negctrl = QMDD.construct(new X(), 1, [{ index: 0, state: '0' }], ter);
+            const posctrl = QMDD.construct(new XGate(), 1, [{ index: 0, state: '1' }], ter);
+            const negctrl = QMDD.construct(new XGate(), 1, [{ index: 0, state: '0' }], ter);
 
             for (const { n, dd, a, i, w } of [
                 { n: 'Positive control', dd: posctrl, a: [true, true, true, false], i: 3, w: [1, 0] },
@@ -197,8 +197,8 @@ describe('QMDD: ', () =>
         {
             const qubits = 2;
             const ter = QMDD.createTerminal(qubits);
-            const posctrl = QMDD.construct(new X(), 0, [{ index: 1, state: '1' }], ter);
-            const negctrl = QMDD.construct(new X(), 0, [{ index: 1, state: '0' }], ter);
+            const posctrl = QMDD.construct(new XGate(), 0, [{ index: 1, state: '1' }], ter);
+            const negctrl = QMDD.construct(new XGate(), 0, [{ index: 1, state: '0' }], ter);
 
             for (const { n, dd, a, b, w, i } of [
                 { n: 'Positive control', dd: posctrl, a: [1, 0, 0, 0], b: [0, 0, 0, 1], w: [1, 0], i: 0 },
@@ -252,7 +252,7 @@ describe('QMDD: ', () =>
         {
             const qubits = 3;
             const ter  = QMDD.createTerminal(qubits);
-            const og = QMDD.construct(new H(), 1, [{ index: 2, state: '1' }, { index: 0, state: '0' }], ter);
+            const og = QMDD.construct(new HGate(), 1, [{ index: 2, state: '1' }, { index: 0, state: '0' }], ter);
             let dd = og;
 
             test('First level', () =>
@@ -317,8 +317,8 @@ describe('QMDD: ', () =>
         {
             const ter = QMDD.createTerminal(2);
             let dd = QMDD.groundState(ter);  // |00>
-                dd = QMDD.multiply(QMDD.construct(new H(), 0, [], ter), dd, ter);  // (H@I)|00>
-                dd = QMDD.multiply(QMDD.construct(new X(), 1, [{ index: 0, state: '1' }], ter), dd, ter);  // CX(H@I)|00>
+                dd = QMDD.multiply(QMDD.construct(new HGate(), 0, [], ter), dd, ter);  // (H@I)|00>
+                dd = QMDD.multiply(QMDD.construct(new XGate(), 1, [{ index: 0, state: '1' }], ter), dd, ter);  // CX(H@I)|00>
 
             test('Entry weight is 1/sqrt(2)', () =>
             {
@@ -385,8 +385,8 @@ describe('QMDD: ', () =>
         test('Sums are cached', () =>
         {
             const ter = QMDD.createTerminal(1);
-            const e0 = QMDD.construct(new X(), 0, [], ter);
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e0 = QMDD.construct(new XGate(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const sum1 = QMDD.add(e0, e1, ter);
             const sum2 = QMDD.add(e0, e1, ter);
 
@@ -396,8 +396,8 @@ describe('QMDD: ', () =>
         test('Commutativity is respected', () =>
         {
             const ter = QMDD.createTerminal(1);
-            const e0 = QMDD.construct(new X(), 0, [], ter);
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e0 = QMDD.construct(new XGate(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const sum1 = QMDD.add(e0, e1, ter);
             const sum2 = QMDD.add(e1, e0, ter);
 
@@ -408,7 +408,7 @@ describe('QMDD: ', () =>
         {
             const ter = QMDD.createTerminal(1);
             const e0 = { dest: ter, weight: 0 };
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const sum = QMDD.add(e0, e1, ter);
             
             expect(e1.dest).toBe(sum.dest);
@@ -418,8 +418,8 @@ describe('QMDD: ', () =>
         test('Adding an element to itself', () =>
         {
             const ter = QMDD.createTerminal(1);
-            const e0 = QMDD.construct(new X(), 0, [], ter);
-            const e1 = QMDD.construct(new X(), 0, [], ter);
+            const e0 = QMDD.construct(new XGate(), 0, [], ter);
+            const e1 = QMDD.construct(new XGate(), 0, [], ter);
             const sum = QMDD.add(e0, e1, ter);
 
             expect(sum.dest).toBe(e0.dest);
@@ -432,8 +432,8 @@ describe('QMDD: ', () =>
         test('Products are cached', () =>
         {
             const ter = QMDD.createTerminal(1);
-            const e0 = QMDD.construct(new X(), 0, [], ter);
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e0 = QMDD.construct(new XGate(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const prod1 = QMDD.multiply(e0, e1, ter);
             const prod2 = QMDD.multiply(e0, e1, ter);
 
@@ -444,7 +444,7 @@ describe('QMDD: ', () =>
         {
             const ter = QMDD.createTerminal(1);
             const e0 = { dest: ter, weight: 0 };
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const prod = QMDD.multiply(e0, e1, ter);
 
             expect(prod).toEqual({ dest: ter, weight: 0 });
@@ -454,7 +454,7 @@ describe('QMDD: ', () =>
         {
             const ter = QMDD.createTerminal(1);
             const e0 = { dest: ter, weight: 1 };
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const prod = QMDD.multiply(e0, e1, ter);
             
             expect(e1.dest).toBe(prod.dest);
@@ -465,7 +465,7 @@ describe('QMDD: ', () =>
         {
             const ter = QMDD.createTerminal(1);
             const e0 = { dest: ter, weight: Complex.I };
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const prod = QMDD.multiply(e0, e1, ter);
             
             expect(prod.dest).toBe(e1.dest);
@@ -477,8 +477,8 @@ describe('QMDD: ', () =>
         test('Multiplying a Hermitian with itself', () =>
         {
             const ter = QMDD.createTerminal(1);
-            const e0 = QMDD.construct(new H(), 0, [], ter);
-            const e1 = QMDD.construct(new H(), 0, [], ter);
+            const e0 = QMDD.construct(new HGate(), 0, [], ter);
+            const e1 = QMDD.construct(new HGate(), 0, [], ter);
             const prod = QMDD.multiply(e0, e1, ter);
 
             expect(prod.weight).toBe(1);
@@ -489,8 +489,8 @@ describe('QMDD: ', () =>
         test('Multiplying a non-Hermitian with its dagger', () =>
         {
             const ter = QMDD.createTerminal(1);
-            const e0 = QMDD.construct(new T(), 0, [], ter);
-            const e1 = QMDD.construct(new T(true), 0, [], ter);
+            const e0 = QMDD.construct(new TGate(), 0, [], ter);
+            const e1 = QMDD.construct(new TGate(true), 0, [], ter);
             const prod = QMDD.multiply(e0, e1, ter);
 
             expect(prod.weight).toBe(1);

@@ -1,5 +1,5 @@
 import { QuantumCircuit } from "../src/circuit";
-import { H, T, X } from "../src/gates";
+import { HGate, IGate, SGate, TGate, XGate, ZGate } from "../src/gates";
 
 type QC = QuantumCircuit;
 type n = number;
@@ -70,49 +70,101 @@ describe('QuantumCircuit: ', () =>
 
             expect([depth1, qc.depth()]).toEqual([2, 3]);
         });
+    
+    test('.depth() after .cswap(); rightmost on control', () =>
+    {
+        const qc = new QuantumCircuit(3);
+        
+        qc.x(0).cswap(0, 1, 2);
+        
+        const depth1 = qc.depth();
+
+        qc.x(1);
+
+        const depth2 = qc.depth();
+
+        qc.x(2);
+
+        const depth3 = qc.depth();
+
+        qc.x(2);
+
+        const depth4 = qc.depth();
+
+        expect([depth1, depth2, depth3, depth4]).toEqual([2, 3, 3, 4]);
+    });
+
+    test('.depth() after .cswap(); rightmost on targets', () =>
+    {
+        const qc = new QuantumCircuit(3);
+
+        qc.x(1).cswap(0, 1, 2);
+
+        const depth1 = qc.depth();
+
+        qc.x(2);
+
+        const depth2 = qc.depth();
+
+        qc.x(0);
+
+        const depth3 = qc.depth();
+
+        qc.x(0);
+
+        const depth4 = qc.depth();
+
+        expect([depth1, depth2, depth3, depth4]).toEqual([2, 3, 3, 4]);
+    });
 
     describe('Erroneous inputs in .append(): ', () =>
     {
         test('Control test (normal case)', () =>
         {
-            expect(() => { new QuantumCircuit(3).append(new X(), 0, [1, 2], '00'); })
+            expect(() => { new QuantumCircuit(3).append([new XGate()], [0], [1, 2], '00'); })
             .not.toThrow();
         });
 
         test('Too many qubits requested', () =>
         {
-            expect(() => { new QuantumCircuit(1).append(new X(), 0, [1]); })
+            expect(() => { new QuantumCircuit(1).append([new XGate()], [0], [1]); })
             .toThrow(`Error in QuantumCircuit.append(): Too many qubits requested (declared width is 1 but 2 indices were received).`);
         });
 
         test('Out of bounds qubits requested', () =>
         {
-            expect(() => { new QuantumCircuit(1).append(new X(), 2); })
+            expect(() => { new QuantumCircuit(1).append([new XGate()], [2]); })
             .toThrow(`Error in QuantumCircuit.append(): Out of bounds qubit requested (received index 2, expected [0, 1)).`);
 
-            expect(() => { new QuantumCircuit(2).append(new X(), 0, [-1]); })
+            expect(() => { new QuantumCircuit(2).append([new XGate()], [0], [-1]); })
             .toThrow(`Error in QuantumCircuit.append(): Out of bounds qubit requested (received index -1, expected [0, 2)).`);
         });
 
         test('Duplicate qubit instance', () =>
         {
-            expect(() => { new QuantumCircuit(5).append(new X(), 1, [0, 1, 2]); })
+            expect(() => { new QuantumCircuit(5).append([new XGate()], [1], [0, 1, 2]); })
             .toThrow(`Error in QuantumCircuit.append(): Duplicate qubit index detected.`);
 
-            expect(() => { new QuantumCircuit(5).append(new X(), 1, [0, 2, 3, 2]); })
+            expect(() => { new QuantumCircuit(5).append([new XGate()], [1], [0, 2, 3, 2]); })
             .toThrow(`Error in QuantumCircuit.append(): Duplicate qubit index detected.`);
         });
 
         test('Unequal number of control indices and states specified', () =>
         {
-            expect(() => { new QuantumCircuit(3).append(new X(), 0, [1, 2], '000'); })
+            expect(() => { new QuantumCircuit(3).append([new XGate()], [0], [1, 2], '000'); })
             .toThrow(`Error in QuantumCircuit.append(): Unequal number of controls (2) and control states (3) given.`);
         });
 
         test('Unrecognized control state', () =>
         {
-            expect(() => { new QuantumCircuit(3).append(new X(), 0, [1, 2], 'as'); })
+            expect(() => { new QuantumCircuit(3).append([new XGate()], [0], [1, 2], 'as'); })
             .toThrow(`Error in QuantumCircuit.append(): Unrecognized character found in ctrlState, '0' or '1' were expected.`);
+        });
+
+        test('Unequal number of gates and target indices passed', () =>
+        {
+            expect(() => { new QuantumCircuit(1).append([new XGate(), new XGate()], [0]); })
+            .toThrow(`Error in QuantumCircuit.append(): Unequal number of gates (2) and target indices (1) given.`);
         });
     });
 
@@ -120,37 +172,37 @@ describe('QuantumCircuit: ', () =>
     {
         test('Control test (normal case)', () =>
         {
-            expect(() => { new QuantumCircuit(3).appendStep([new X(), new H()], [0, 1]); })
+            expect(() => { new QuantumCircuit(3).appendStep([new XGate(), new HGate()], [0, 1]); })
             .not.toThrow();
         });
 
         test('Unequal number of control indices and states specified', () =>
         {
-            expect(() => { new QuantumCircuit(3).appendStep([new X()], [1, 2]); })
+            expect(() => { new QuantumCircuit(3).appendStep([new XGate()], [1, 2]); })
             .toThrow(`Error in QuantumCircuit.appendStep(): Unequal number of gates (1) and qubit indices (2) given.`);
         });
 
         test('Too many qubits requested', () =>
         {
-            expect(() => { new QuantumCircuit(1).appendStep([new X(), new H()], [0, 1]); })
+            expect(() => { new QuantumCircuit(1).appendStep([new XGate(), new HGate()], [0, 1]); })
             .toThrow(`Error in QuantumCircuit.appendStep(): Too many qubits requested (declared width is 1 but 2 indices were received).`);
         });
 
         test('Out of bounds qubits requested', () =>
         {
-            expect(() => { new QuantumCircuit(1).appendStep([new X()], [2]); })
+            expect(() => { new QuantumCircuit(1).appendStep([new XGate()], [2]); })
             .toThrow(`Error in QuantumCircuit.appendStep(): Out of bounds qubit requested (received index 2, expected [0, 1)).`);
 
-            expect(() => { new QuantumCircuit(2).appendStep([new X()], [-1]); })
+            expect(() => { new QuantumCircuit(2).appendStep([new XGate()], [-1]); })
             .toThrow(`Error in QuantumCircuit.appendStep(): Out of bounds qubit requested (received index -1, expected [0, 2)).`);
         });
 
         test('Duplicate qubit instance', () =>
         {
-            expect(() => { new QuantumCircuit(5).appendStep([new X(), new X(), new H()], [0, 1, 1]); })
+            expect(() => { new QuantumCircuit(5).appendStep([new XGate(), new XGate(), new HGate()], [0, 1, 1]); })
             .toThrow(`Error in QuantumCircuit.appendStep(): Duplicate qubit index detected.`);
 
-            expect(() => { new QuantumCircuit(5).appendStep([new X(), new X(), new H(), new T()], [0, 2, 3, 2]); })
+            expect(() => { new QuantumCircuit(5).appendStep([new XGate(), new XGate(), new HGate(), new TGate()], [0, 2, 3, 2]); })
             .toThrow(`Error in QuantumCircuit.appendStep(): Duplicate qubit index detected.`);
         });
     });
@@ -456,7 +508,7 @@ describe('QuantumCircuit: ', () =>
     {
         const qc = 
             new QuantumCircuit(5)
-            .appendStep([new X(), new H(), new T(true)], [0, 1, 3]);
+            .appendStep([new XGate(), new HGate(), new TGate(true)], [0, 1, 3]);
 
         expect([...qc.statevector()]).toEqual([
             { state: '00001', re: a, im: 0},

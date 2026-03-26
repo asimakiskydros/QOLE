@@ -1,6 +1,6 @@
 {
   "name": "qole",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "main": "./dist/circuit.js",
   "types": "./dist/circuit.d.ts",
   "files": [

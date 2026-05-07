@@ -90,7 +90,7 @@ npm run build
 
 The actual simulation is done through these Decision Diagrams. For an initial introduction to QMDDs, please refer to [Zulehner and Wille,  	arXiv:1707.00865 (2017)]( https://doi.org/10.48550/arXiv.1707.00865).
 
-This project acts as a review/tutorial of the topic, merging together implementation details scattered throughout the literature. You can find the published tutorial on [Kydros et al. (2025)](https://doi.org/10.1007/s11128-025-04917-0). The main sources followed are:
+This project acts as a review/tutorial of the topic, merging together implementation details scattered throughout the literature. You can find published tutorials on [Kydros et al. (2025)](https://doi.org/10.1007/s11128-025-04917-0) and [Kydros et al. (2026)](https://doi.org/10.1109/PACET68758.2026.11498244). The main sources followed are:
 
 - [A. Zulehner and R. Wille. "Advanced Simulation of Quantum Computations". arXiv:1707.00865 (2017)](https://doi.org/10.48550/arXiv.1707.00865)
 - [R. Wille et al. "Decision Diagrams for Quantum Computing". In: Topaloglu, R.O. (eds) Design Automation of Quantum Computers. Springer, Cham. https://doi.org/10.1007/978-3-031-15699-1_1](https://doi.org/10.1007/978-3-031-15699-1_1)
